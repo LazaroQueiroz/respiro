@@ -30,7 +30,8 @@ import org.json.JSONObject
 
 /**
  * Versão web de uma rede, com:
- *  - feed infinito coberto por um painel de atalhos (busca, mensagens…);
+ *  - no lugar do feed infinito, uma página local leve com busca e atalhos (assets/home.html);
+ *  - filtros injetados em cada página (assets/filter.js);
  *  - Reels/Shorts escondidos e abas bloqueadas (Shorts viram vídeo normal);
  *  - sessão com duração escolhida antes de entrar + barra de tempo;
  *  - "stopping cue" depois de N telas roladas;
@@ -217,10 +218,12 @@ class WebActivity : Activity() {
             .put("name", site.name)
             .put("search", site.search ?: "")
             .put("links", JSONArray().apply { site.links.forEach { put(JSONArray().put(it.first).put(it.second)) } })
-        JS.replace("__CFG__", cfg.toString())
+        asset("filter.js").replace("__CFG__", cfg.toString())
     }
 
-    private fun inject() { web.evaluateJavascript(if (feedForced) "window.__rspFeedOk=1;$script" else script, null) }
+    private fun asset(name: String) = assets.open(name).bufferedReader().use { it.readText() }
+
+    private fun inject() { web.evaluateJavascript(script, null) }
 
     // ---------- Início leve ----------
 
@@ -248,13 +251,15 @@ class WebActivity : Activity() {
                 "<script>document.getElementById('s').onsubmit=function(e){e.preventDefault();var v=this.q.value.trim();" +
                 "if(v)location.href=${JSONObject.quote(it)}.replace('%s',encodeURIComponent(v));};</script>"
         } ?: ""
-        val html = HOME_HTML.replace("__NAME__", esc(site.name)).replace("__SEARCH__", search).replace("__LINKS__", links)
+        val html = asset("home.html").replace("__NAME__", esc(site.name)).replace("__SEARCH__", search).replace("__LINKS__", links)
         web.loadDataWithBaseURL(site.url, html, "text/html", "utf-8", site.url)
     }
 
     inner class Bridge {
         @JavascriptInterface fun scr(n: Int) { h.post { onScreens(n) } }
         @JavascriptInterface fun feed() { h.post { askShowFeed() } }
+        /** O site navegou até o feed: troca pela página leve, a não ser que o feed tenha sido liberado. */
+        @JavascriptInterface fun home() { h.post { if (Prefs.hideFeed && !feedForced) loadHome() } }
         @JavascriptInterface fun reel() {
             h.post { if (!reelToast) { reelToast = true; Toast.makeText(this@WebActivity, "Só este vídeo — deslizar para os próximos está bloqueado", Toast.LENGTH_LONG).show() } }
         }
@@ -309,11 +314,22 @@ class WebActivity : Activity() {
         }
     }
 
+    /** Começa uma sessão nova de [minutes] minutos. */
     private fun start(minutes: Int) {
         budget = minutes * MIN
         used = 0; screens = 0
         nextCue = Prefs.scrollCue
         logged = false
+        resume()
+    }
+
+    /** Dá mais [minutes] minutos à sessão atual. */
+    private fun extend(minutes: Int) {
+        budget += minutes * MIN
+        resume()
+    }
+
+    private fun resume() {
         running = true
         resumedAt = now()
         hideOverlay()
@@ -322,14 +338,11 @@ class WebActivity : Activity() {
         h.removeCallbacks(tick); h.post(tick)
     }
 
-    private fun extend(minutes: Int) {
-        budget += minutes * MIN
-        running = true
-        resumedAt = now()
-        hideOverlay()
-        web.resumeTimers()
-        web.onResume()
-        h.removeCallbacks(tick); h.post(tick)
+    /** Para o relógio e congela a página (sem JavaScript nem vídeo rodando por trás da tela). */
+    private fun freeze() {
+        stopClock()
+        web.onPause()
+        web.pauseTimers()
     }
 
     private fun stopClock() {
@@ -338,9 +351,7 @@ class WebActivity : Activity() {
     }
 
     private fun timeUp() {
-        stopClock()
-        web.onPause()
-        web.pauseTimers()
+        freeze()
         val col = vbox(28) { gravity = Gravity.CENTER_HORIZONTAL }
         col.add(BreathView(this), w = dp(120), h = dp(120))
         col.add(label("Seu tempo acabou.", 28f, 700).apply { gravity = Gravity.CENTER }, top = 28)
@@ -356,9 +367,7 @@ class WebActivity : Activity() {
     }
 
     private fun showMood() {
-        stopClock()
-        web.onPause()
-        web.pauseTimers()
+        freeze()
         val col = vbox(28)
         col.add(label("Como você sai daqui?", 28f, 700))
         col.add(caption("Isso mostra no Painel quais redes valem a pena para você."), top = 6)
@@ -420,9 +429,7 @@ class WebActivity : Activity() {
         val show = button("Mostrar feed") {
             hideOverlay()
             feedForced = true
-            web.evaluateJavascript("document.querySelector('meta[name=rsp-home]')?1:(window.__rsp&&window.__rsp.show(),0)") {
-                if (it == "1") web.loadUrl(site.url)
-            }
+            web.loadUrl(site.url)
         }
         col.add(show, top = 30)
         col.add(button("Voltar", Btn.SECONDARY) { hideOverlay() }, top = 10)
@@ -515,111 +522,3 @@ class WebActivity : Activity() {
         exitFlow()
     }
 }
-
-private val JS = """
-(function(){
-if(window.__rsp){window.__rsp.u();return;}
-var C=__CFG__,B=window.RespiroBridge,feedOk=!!window.__rspFeedOk,acc=0,pos=new WeakMap();
-var fRe=C.feed?new RegExp(C.feed):null,bRe=C.block?new RegExp(C.block):null,rRe=C.reel?new RegExp(C.reel):null,rId=null,rUrl='',ty=0;
-function css(){if(!C.hide)return;
- if(!document.getElementById('__rsp_css')){var s=document.createElement('style');s.id='__rsp_css';s.textContent=C.hide+'{display:none!important}';(document.head||document.documentElement).appendChild(s);}
- try{var n=document.querySelectorAll(C.hide);for(var i=0;i<n.length;i++)n[i].style.setProperty('display','none','important');}catch(e){}}
-function el(t,st,tx){var e=document.createElement(t);if(st)e.style.cssText=st;if(tx)e.textContent=tx;return e;}
-function under(on){if(!document.body)return;var k=document.body.children;
- for(var i=0;i<k.length;i++){if(k[i].id==='__rsp_ov')continue;
-  if(on)k[i].style.setProperty('content-visibility','hidden','important');else k[i].style.removeProperty('content-visibility');}
- if(on){var v=document.querySelectorAll('video');for(var j=0;j<v.length;j++)if(!v[j].paused)v[j].pause();}}
-function ov(on){var o=document.getElementById('__rsp_ov');
- under(on);
- if(!on){if(o)o.remove();return;}
- if(o||!document.body)return;
- var dk=matchMedia('(prefers-color-scheme: dark)').matches,bg=dk?'#000':'#fff',fg=dk?'#fff':'#000',mu='#86868b',cd=dk?'#161617':'#f5f5f7';
- o=el('div','position:fixed;inset:0;z-index:2147483647;background:'+bg+';color:'+fg+';display:flex;flex-direction:column;justify-content:center;padding:32px 24px;box-sizing:border-box;font-family:system-ui,-apple-system,Roboto,sans-serif;overflow:auto;-webkit-font-smoothing:antialiased');
- o.id='__rsp_ov';
- o.appendChild(el('div','font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:'+mu,C.name));
- o.appendChild(el('div','font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:6px','Feed oculto'));
- o.appendChild(el('div','font-size:16px;color:'+mu+';margin-top:6px;line-height:1.4','Vá direto ao que você veio fazer.'));
- if(C.search){var f=el('form','margin:28px 0 0');var i=el('input','width:100%;box-sizing:border-box;font:inherit;font-size:17px;padding:15px 16px;border-radius:16px;border:0;outline:0;background:'+cd+';color:'+fg);
-  i.type='search';i.placeholder='Buscar';f.appendChild(i);
-  f.addEventListener('submit',function(ev){ev.preventDefault();var v=i.value.trim();if(v)location.href=C.search.replace('%s',encodeURIComponent(v));});o.appendChild(f);}
- var l=el('div','margin-top:12px;display:flex;flex-direction:column;gap:10px');
- C.links.forEach(function(k){var a=el('a','display:block;padding:16px;border-radius:16px;background:'+cd+';color:'+fg+';text-decoration:none;font-size:17px;font-weight:500',k[0]);a.href=k[1];l.appendChild(a);});
- o.appendChild(l);
- var s=el('div','margin-top:32px;color:'+mu+';font-size:14px;text-align:center;text-decoration:underline;cursor:pointer','Mostrar o feed mesmo assim');
- s.addEventListener('click',function(e){e.preventDefault();if(B)B.feed();});
- o.appendChild(s);document.body.appendChild(o);}
-function lock(on){var L=document.querySelectorAll('[data-rsp-lock]'),i;
- if(!on){for(i=0;i<L.length;i++){L[i].style.removeProperty('overflow-y');L[i].removeAttribute('data-rsp-lock');}return;}
- var v=document.querySelectorAll('video');
- for(i=0;i<v.length;i++){var e=v[i].parentElement;
-  while(e&&e!==document.body){var cs=getComputedStyle(e);
-   if(/(auto|scroll)/.test(cs.overflowY)&&e.scrollHeight>e.clientHeight+10){e.style.setProperty('overflow-y','hidden','important');e.setAttribute('data-rsp-lock','1');}
-   e=e.parentElement;}}}
-var NAG=/^(use the app|usar o app|abrir o app|abrir app|open app|open in app|abrir no app|abrir no aplicativo|get the app|baixar o app|open tiktok|abrir o tiktok|switch to the app)$/i;
-function nag(){var b=document.querySelectorAll('button,a[role=button],a[href*="app"]');
- for(var i=0;i<b.length;i++){if(!NAG.test((b[i].textContent||'').trim()))continue;
-  var e=b[i];for(var k=0;k<8&&e&&e!==document.body;k++){var ps=getComputedStyle(e).position;
-   if(ps==='fixed'||ps==='sticky'){e.style.setProperty('display','none','important');break;}e=e.parentElement;}}}
-function login(){return !!document.querySelector('input[type=password],input[name=pass],input[autocomplete=current-password]');}
-var HOME=!!document.querySelector('meta[name=rsp-home]');
-function u(){if(HOME)return;css();nag();var p=location.pathname;
- if(C.yt){var m=p.match(/^\/shorts\/([\w-]+)/);if(m){location.replace('/watch?v='+m[1]);return;}}
- if(bRe&&bRe.test(p)){if(B)B.blocked();location.replace(C.home);return;}
- if(rRe){var r=p.match(rRe);
-  if(!r)rId=null;
-  else if(!rId){rId=r[1];rUrl=location.href;if(B)B.reel();}
-  else if(r[1]!==rId){location.replace(rUrl);return;}
-}
- if(C.reel)lock(!!rId||bigVid());
- ov(!!(fRe&&!feedOk&&fRe.test(p)&&!login()));}
-window.__rsp={u:u,show:function(){feedOk=true;ov(false);}};
-document.addEventListener('scroll',function(e){var t=e.target&&e.target.nodeType===1?e.target:document.scrollingElement;if(!t)return;
- var y=t.scrollTop,q=pos.get(t);if(q!==undefined)acc+=Math.abs(y-q);pos.set(t,y);
- var hh=innerHeight||600;if(acc>=hh*3){var n=Math.floor(acc/hh);acc-=n*hh;if(B)B.scr(n);}},{capture:true,passive:true});
-['pushState','replaceState'].forEach(function(k){var o=history[k];history[k]=function(){var x=o.apply(this,arguments);setTimeout(u,0);return x;};});
-window.addEventListener('popstate',function(){setTimeout(u,0);});
-function bigVid(){var v=document.querySelectorAll('video'),H=innerHeight;
- for(var i=0;i<v.length;i++){var r=v[i].getBoundingClientRect();if(r.height>H*0.45&&r.top<H*0.5&&r.bottom>H*0.5)return true;}return false;}
-function exempt(t){if(!t||!t.closest)return false;if(t.closest('textarea,input'))return true;
- var d=t.closest('[role=dialog]');return !!(d&&!d.querySelector('video'));}
-function active(t){return !!C.reel&&(!!rId||bigVid())&&!exempt(t);}
-var moved=false,act=false,lastSwipe=0;
-['touchstart','pointerdown'].forEach(function(k){window.addEventListener(k,function(e){var q=e.touches?e.touches[0]:e;
- if(k==='pointerdown'&&e.pointerType==='touch'&&act)return;ty=q.clientY;moved=false;act=active(e.target);
- if(act&&B&&!window.__rspT){window.__rspT=1;B.reel();}},{capture:true,passive:true});});
-['touchmove','pointermove'].forEach(function(k){window.addEventListener(k,function(e){if(!act)return;
- var q=e.touches?e.touches[0]:e;if(Math.abs(q.clientY-ty)>8){moved=true;lastSwipe=Date.now();}
- if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();},{capture:true,passive:false});});
-['touchend','pointerup'].forEach(function(k){window.addEventListener(k,function(e){if(act&&moved){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();}},{capture:true,passive:false});});
-// Deslizar para cima no visualizador abre a resposta (teclado): desfaz se o foco veio de um deslize, não de um toque.
-window.addEventListener('focusin',function(e){var t=e.target;
- if(Date.now()-lastSwipe<900&&t&&(t.isContentEditable||/^(TEXTAREA|INPUT)$/.test(t.tagName))){t.blur();}},true);
-window.addEventListener('wheel',function(e){if(active(e.target)){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();}},{capture:true,passive:false});
-var pend=false;function sched(){if(pend)return;pend=true;setTimeout(function(){pend=false;if(!document.hidden)u();},700);}
-new MutationObserver(sched).observe(document.documentElement,{childList:true,subtree:true});
-setInterval(function(){if(!document.hidden)u();},4000);u();
-})();
-"""
-
-private val HOME_HTML = """<!doctype html><html lang=pt><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><meta name=rsp-home content=1>
-<style>
-:root{--bg:#fff;--fg:#000;--mu:#86868b;--cd:#f5f5f7;color-scheme:light dark}
-@media (prefers-color-scheme:dark){:root{--bg:#000;--fg:#fff;--cd:#161617}}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-main{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:32px 24px}
-.k{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--mu)}
-h1{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:6px 0 0}
-p{font-size:16px;color:var(--mu);margin:6px 0 0;line-height:1.4}
-form{margin-top:28px}
-input{width:100%;font:inherit;font-size:17px;padding:15px 16px;border-radius:16px;border:0;outline:0;background:var(--cd);color:var(--fg)}
-nav{margin-top:12px;display:flex;flex-direction:column;gap:10px}
-nav a{display:block;padding:16px;border-radius:16px;background:var(--cd);color:var(--fg);text-decoration:none;font-size:17px;font-weight:500}
-nav a:active{opacity:.6}
-button{margin-top:32px;background:none;border:0;color:var(--mu);font:inherit;font-size:14px;text-decoration:underline}
-</style></head><body><main>
-<div class=k>__NAME__</div><h1>Feed oculto</h1><p>Vá direto ao que você veio fazer.</p>
-__SEARCH__<nav>__LINKS__</nav>
-<button onclick="window.RespiroBridge&&RespiroBridge.feed()">Mostrar o feed mesmo assim</button>
-</main></body></html>"""

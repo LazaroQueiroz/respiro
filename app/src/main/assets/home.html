@@ -1,0 +1,23 @@
+<!-- Página local "Feed oculto" (WebActivity.loadHome). __NAME__, __SEARCH__ e __LINKS__ são preenchidos pelo app. -->
+<!doctype html><html lang=pt><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><meta name=rsp-home content=1>
+<style>
+:root{--bg:#fff;--fg:#000;--mu:#86868b;--cd:#f5f5f7;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--fg:#fff;--cd:#161617}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:32px 24px}
+.k{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--mu)}
+h1{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:6px 0 0}
+p{font-size:16px;color:var(--mu);margin:6px 0 0;line-height:1.4}
+form{margin-top:28px}
+input{width:100%;font:inherit;font-size:17px;padding:15px 16px;border-radius:16px;border:0;outline:0;background:var(--cd);color:var(--fg)}
+nav{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+nav a{display:block;padding:16px;border-radius:16px;background:var(--cd);color:var(--fg);text-decoration:none;font-size:17px;font-weight:500}
+nav a:active{opacity:.6}
+button{margin-top:32px;background:none;border:0;color:var(--mu);font:inherit;font-size:14px;text-decoration:underline}
+</style></head><body><main>
+<div class=k>__NAME__</div><h1>Feed oculto</h1><p>Vá direto ao que você veio fazer.</p>
+__SEARCH__<nav>__LINKS__</nav>
+<button onclick="window.RespiroBridge&&RespiroBridge.feed()">Mostrar o feed mesmo assim</button>
+</main></body></html>
