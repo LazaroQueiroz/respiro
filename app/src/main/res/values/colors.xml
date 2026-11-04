@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#FFFFFF</color>
+    <color name="fg">#000000</color>
+    <color name="muted">#86868B</color>
+    <color name="card">#F5F5F7</color>
+    <color name="line">#E8E8ED</color>
+    <color name="edge">#D2D2D7</color>
+    <color name="sheet">#FFFFFF</color>
+    <color name="ic_bg">#000000</color>
+</resources>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Respiro</string>
+    <string name="a11y_desc">O Respiro percebe quando você abre um app que escolheu limitar (Instagram, YouTube, TikTok…) e mostra uma pausa antes. Ele só vê o nome do app aberto — nunca lê o conteúdo da tela.</string>
+</resources>
