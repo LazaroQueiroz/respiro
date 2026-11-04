@@ -22,6 +22,8 @@ import java.util.Calendar
  * (que aparece na tela de pausa). Aos domingos, inclui o resumo da semana e ajuste da meta.
  */
 class ReflectionActivity : Activity() {
+    private class Summary(val screen: Long, val social: Long, val avoided: Int, val week: Long, val prevWeek: Long)
+
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         getSystemService(NotificationManager::class.java).cancel(1)
@@ -54,9 +56,8 @@ class ReflectionActivity : Activity() {
         val ifT = EditText(this).apply { hint = "Se eu… (ex.: sentir tédio no ônibus)"; setText(Prefs.planIf); isSingleLine = true }
         val thenT = EditText(this).apply { hint = "então eu vou… (ex.: ouvir um podcast)"; setText(Prefs.planThen); isSingleLine = true }
         col.add(ifT, top = 10)
-        col.add(chips(listOf("sentir tédio", "acordar", "deitar para dormir", "travar no estudo")) {
-            ifT.setText(listOf("sentir tédio", "acordar", "deitar para dormir", "travar no estudo")[it.first()])
-        }, top = 6)
+        val ifs = listOf("sentir tédio", "acordar", "deitar para dormir", "travar no estudo")
+        col.add(chips(ifs) { ifT.setText(ifs[it.first()]) }, top = 6)
         col.add(thenT, top = 14)
         val thens = listOf("beber água e alongar", "ler 2 páginas", "mandar mensagem para alguém", "deixar o celular em outro cômodo")
         col.add(chips(thens) { thenT.setText(thens[it.first()]) }, top = 6)
@@ -83,32 +84,28 @@ class ReflectionActivity : Activity() {
         setContentView(root)
 
         async({
-            val today = Usage.day(this, dayStart())
-            val web = Db.i.webMs(dayStart(), nextDay(dayStart()))
-            val social = Sites.all().sumOf { siteMs(it, today, web) }
-            val o = Db.i.outcomes(dayStart())
-            var w = 0L; var wp = 0L; var prevDays = 0
-            if (weekly) {
-                for (i in 0..13) {
-                    val d = Usage.day(this, dayStart(-i))
-                    val wb = Db.i.webMs(d.start, nextDay(d.start))
-                    val s = Sites.all().sumOf { siteMs(it, d, wb) }
-                    if (i < 7) w += s else { wp += s; if (d.total > 0) prevDays++ }
-                }
-                if (prevDays < 7) wp = 0 // semana anterior incompleta: não compara
-            }
-            arrayOf(today.total, social, (o["dismiss"] ?: 0).toLong() + (o["left"] ?: 0), w, wp)
+            val today = usageOn(this, dayStart())
+            // Semana atual (0..6 dias atrás) vs. anterior (7..13); só compara se a anterior tem dados completos.
+            val week = if (weekly) (0..13).map { usageOn(this, dayStart(-it)) } else emptyList()
+            val prev = week.drop(7)
+            Summary(
+                screen = today.total,
+                social = today.social,
+                avoided = Db.i.outcomes(dayStart()).gaveUp(),
+                week = week.take(7).sumOf { it.social },
+                prevWeek = if (prev.size == 7 && prev.all { it.total > 0 }) prev.sumOf { it.social } else 0,
+            )
         }) { r ->
             val parts = ArrayList<String>()
-            if (r[0] > 0) parts += "Tela ${fmt(r[0])}"
-            parts += "redes ${fmt(r[1])}"
-            if (r[2] > 0) parts += "${r[2]} aberturas evitadas"
+            if (r.screen > 0) parts += "Tela ${fmt(r.screen)}"
+            parts += "redes ${fmt(r.social)}"
+            if (r.avoided > 0) parts += "${r.avoided} aberturas evitadas"
             summary.text = "Hoje: " + parts.joinToString(" · ") + "."
             if (weekly) {
                 weekBox.add(section("Sua semana"))
-                weekBox.add(label("${fmt(r[3] / 7)} por dia em redes", 22f, 700), top = 6)
-                if (r[4] > 0) {
-                    val pct = ((r[3] - r[4]) * 100 / r[4]).toInt()
+                weekBox.add(label("${fmt(r.week / 7)} por dia em redes", 22f, 700), top = 6)
+                if (r.prevWeek > 0) {
+                    val pct = ((r.week - r.prevWeek) * 100 / r.prevWeek).toInt()
                     weekBox.add(caption(if (pct <= 0) "${pct}% vs. semana anterior." else "+$pct% vs. semana anterior."), top = 2)
                 }
                 weekBox.add(row("Meta diária", "Ajuste para a próxima semana.",

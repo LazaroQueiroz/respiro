@@ -225,26 +225,21 @@ fun MainActivity.todayTab(): View {
     }
     col.add(spacer(), h = dp(12))
 
-    async({
-        val d = Usage.day(this, dayStart())
-        val web = Db.i.webMs(dayStart(), nextDay(dayStart()))
-        val per = Sites.all().associate { it.id to siteMs(it, d, web) }
-        Triple(d, per, Db.i.outcomes(dayStart()))
-    }) { (d, per, opens) ->
-        val social = per.values.sum()
+    async({ usageOn(this, dayStart()) to Db.i.outcomes(dayStart()) }) { (d, opens) ->
+        val social = d.social
         val goal = Prefs.goalMin * MIN
         if (!Prefs.focusActive()) {
             ring.fraction = social.toFloat() / goal
             big.text = fmt(social)
             if (social > goal) small.text = "${fmt(social - goal)} além da meta"
         }
-        val skipped = (opens["dismiss"] ?: 0) + (opens["left"] ?: 0) + (opens["blocked"] ?: 0)
+        val skipped = opens.gaveUp()
         val parts = ArrayList<String>()
         if (Usage.granted(this)) parts += "tela ${fmt(d.total)}"
         if (d.pickups > 0) parts += "${d.pickups} desbloqueios"
         if (skipped > 0) parts += "$skipped evitadas"
         sub.text = parts.joinToString("  ·  ")
-        minutes.forEach { (id, tv) -> tv.text = per[id]?.takeIf { it >= MIN }?.let { fmt(it) } ?: "—" }
+        minutes.forEach { (id, tv) -> tv.text = d.perSite[id]?.takeIf { it >= MIN }?.let { fmt(it) } ?: "—" }
     }
     return scroll(col)
 }
@@ -266,9 +261,8 @@ private fun MainActivity.focusDialog() {
 // =====================================================================
 
 private class Stats(
-    val days: List<Usage.Day>,
-    val social: LongArray,
-    val perSite7: Map<String, Long>,
+    /** 14 dias, do mais antigo (0) a hoje (13). */
+    val days: List<DayUsage>,
     val outcomes: Map<String, Int>,
     val intentions: Map<String, Int>,
     val moods: Map<String, IntArray>,
@@ -286,14 +280,10 @@ fun MainActivity.statsTab(): View {
     body.add(caption("Calculando…"), top = 20)
 
     async({
-        val sites = Sites.all()
-        val days = (13 downTo 0).map { Usage.day(this, dayStart(-it)) }
-        val webs = days.map { Db.i.webMs(it.start, nextDay(it.start)) }
-        val social = LongArray(14) { i -> sites.sumOf { s -> siteMs(s, days[i], webs[i]) } }
-        val per7 = sites.associate { s -> s.id to (7..13).sumOf { i -> siteMs(s, days[i], webs[i]) } }
+        val days = (13 downTo 0).map { usageOn(this, dayStart(-it)) }
         val since = dayStart(-6)
         Stats(
-            days, social, per7, Db.i.outcomes(since), Db.i.intentions(since), Db.i.moods(dayStart(-29)),
+            days, Db.i.outcomes(since), Db.i.intentions(since), Db.i.moods(dayStart(-29)),
             Db.i.hours(dayStart(-13)), Db.i.ratings(since), Db.i.pulls(since),
         )
     }) { st -> body.removeAllViews(); fillStats(body, st) }
@@ -304,8 +294,9 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
     val goal = Prefs.goalMin * MIN
     val last7 = 7..13
     val total7 = last7.sumOf { st.days[it].total }
-    val social7 = last7.sumOf { st.social[it] }
-    val socialPrev = (0..6).sumOf { st.social[it] }
+    val social = LongArray(14) { st.days[it].social }
+    val social7 = last7.sumOf { social[it] }
+    val socialPrev = (0..6).sumOf { social[it] }
     val hasPrev = (0..6).all { st.days[it].total > 0 } // só compara com semana completa
 
     // --- Insights
@@ -329,8 +320,8 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
     }
     val streak = run {
         var n = 0
-        for (i in 12 downTo 0) { if (st.days[i].total == 0L || st.social[i] > goal) break; n++ }
-        if (st.social[13] <= goal) n + 1 else n
+        for (i in 12 downTo 0) { if (st.days[i].total == 0L || social[i] > goal) break; n++ }
+        if (social[13] <= goal) n + 1 else n
     }
     if (streak >= 2) insights += "$streak dias seguidos dentro da meta."
     if (insights.isNotEmpty()) {
@@ -352,7 +343,7 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
         })
         val bars = BarsView(this@fillStats)
         bars.set(
-            LongArray(7) { st.days[7 + it].total }, LongArray(7) { st.social[7 + it] },
+            LongArray(7) { st.days[7 + it].total }, LongArray(7) { social[7 + it] },
             Array(7) { dayLetter(st.days[7 + it].start) }, goal, highlight = 6,
         )
         add(bars, top = 18)
@@ -362,7 +353,8 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
     }, top = 10)
 
     // --- Por rede
-    val per = st.perSite7.filter { it.value / 7 >= MIN }.toList().sortedByDescending { it.second }
+    val per = Sites.all().map { s -> s.id to last7.sumOf { st.days[it].of(s) } }
+        .filter { it.second / 7 >= MIN }.sortedByDescending { it.second }
     if (per.isNotEmpty()) {
         body.add(section("Por rede · média diária"), top = 28)
         val max = per.first().second
@@ -381,9 +373,9 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
 
     // --- Pausas
     val o = st.outcomes
-    val tries = listOf("dismiss", "left", "web", "app", "blocked").sumOf { o[it] ?: 0 }
+    val tries = o.attempts()
     if (tries > 0) {
-        val gaveUp = (o["dismiss"] ?: 0) + (o["left"] ?: 0) + (o["blocked"] ?: 0)
+        val gaveUp = o.gaveUp()
         body.add(section("Pausas"), top = 28)
         body.add(card {
             fun tile(n: String, l: String) = vbox { add(label(n, 28f, 700)); add(caption(l, 13f)) }
@@ -392,8 +384,8 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
                 add(tile("${gaveUp * 100 / tries}%", "desistências"), w = 0, weight = 1f)
             })
             add(hbox {
-                add(tile("${o["web"] ?: 0}", "foram para a web"), w = 0, weight = 1f)
-                add(tile("${o["app"] ?: 0}", "abriram o app"), w = 0, weight = 1f)
+                add(tile("${o[Outcome.WEB] ?: 0}", "foram para a web"), w = 0, weight = 1f)
+                add(tile("${o[Outcome.APP] ?: 0}", "abriram o app"), w = 0, weight = 1f)
             }, top = 16)
             add(caption("No estudo do one sec, só a pausa fez as pessoas desistirem de 36% das aberturas.", 12f), top = 14)
         }, top = 10)
@@ -546,7 +538,7 @@ fun MainActivity.settingsTab(): View {
         add(row("Ver a tela de pausa", "Prévia com o YouTube — nada é registrado.") {
             startActivity(
                 Intent(this@settingsTab, InterceptActivity::class.java)
-                    .putExtra("site", "youtube").putExtra("mode", "open").putExtra("preview", true),
+                    .putExtra("site", "youtube").putExtra("mode", InterceptActivity.Mode.OPEN.name).putExtra("preview", true),
             )
         })
     }

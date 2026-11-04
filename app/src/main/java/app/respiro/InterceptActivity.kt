@@ -22,9 +22,12 @@ import kotlin.math.min
  *  - acima do limite diário, exige digitar uma frase.
  */
 class InterceptActivity : Activity() {
+    /** OPEN: abriu o app · EXPIRED: o passe de minutos acabou · FOCUS: modo foco ativo. */
+    enum class Mode { OPEN, EXPIRED, FOCUS }
+
     private val h = Handler(Looper.getMainLooper())
     private lateinit var site: Site
-    private var mode = "open"
+    private var mode = Mode.OPEN
     private var pkg: String? = null
     private var intention: String? = null
     private var delay = 0
@@ -42,7 +45,7 @@ class InterceptActivity : Activity() {
     override fun onNewIntent(i: Intent) {
         super.onNewIntent(i)
         setIntent(i)
-        if (!decided && ::site.isInitialized) log("left")
+        if (!decided && ::site.isInitialized) log(Outcome.LEFT)
         setup(i)
     }
 
@@ -54,7 +57,7 @@ class InterceptActivity : Activity() {
         // Saiu sem decidir (Home, Recentes, tela apagada): conta como não abrir.
         if (!decided && !isFinishing) {
             decided = true
-            log(if (mode == "expired") "expired_exit" else "left")
+            log(if (mode == Mode.EXPIRED) Outcome.EXPIRED_EXIT else Outcome.LEFT)
             finish()
         }
     }
@@ -62,33 +65,34 @@ class InterceptActivity : Activity() {
     override fun onDestroy() { h.removeCallbacksAndMessages(null); super.onDestroy() }
 
     @Deprecated("Deprecated in Java")
-    override fun onBackPressed() = leave(if (mode == "expired") "expired_exit" else "dismiss")
+    override fun onBackPressed() = leave(if (mode == Mode.EXPIRED) Outcome.EXPIRED_EXIT else Outcome.DISMISS)
 
     private fun setup(i: Intent) {
         h.removeCallbacksAndMessages(null)
         site = Sites.byId(i.getStringExtra("site") ?: "") ?: run { finish(); return }
-        mode = i.getStringExtra("mode") ?: "open"
+        mode = runCatching { Mode.valueOf(i.getStringExtra("mode")!!) }.getOrDefault(Mode.OPEN)
         pkg = i.getStringExtra("pkg")
         preview = i.getBooleanExtra("preview", false)
-        if (mode == "open" && Prefs.focusActive()) mode = "focus"
+        if (mode == Mode.OPEN && Prefs.focusActive()) mode = Mode.FOCUS
         intention = null
         decided = false
         overLimit = false
 
+        // Atrito crescente: 5 s na 1ª abertura do dia, +2 s a cada nova, até 30 s.
         val opens = Db.i.countOpens(site.id, dayStart())
         delay = when (mode) {
-            "expired" -> 3
-            "focus" -> 0
-            else -> if (Prefs.restNow()) 30 else min(30, 5 + opens * 2)
+            Mode.EXPIRED -> 3
+            Mode.FOCUS -> 0
+            Mode.OPEN -> if (Prefs.restNow()) 30 else min(30, 5 + opens * 2)
         }
 
         val col = vbox(28) { gravity = Gravity.CENTER_HORIZONTAL }
         col.add(label(site.name, 34f, 700).apply { gravity = Gravity.CENTER })
         val sub = caption(
             when (mode) {
-                "focus" -> "Modo foco"
-                "expired" -> "Seu tempo acabou"
-                else -> "${opens + 1}ª vez hoje" + if (Prefs.restNow()) " · horário de descanso" else ""
+                Mode.FOCUS -> "Modo foco"
+                Mode.EXPIRED -> "Seu tempo acabou"
+                Mode.OPEN -> "${opens + 1}ª vez hoje" + if (Prefs.restNow()) " · horário de descanso" else ""
             },
         ).apply { gravity = Gravity.CENTER }
         col.add(sub, top = 4)
@@ -115,10 +119,7 @@ class InterceptActivity : Activity() {
         setContentView(root)
 
         // Uso de hoje → limite.
-        if (mode != "focus") async({
-            val d = Usage.day(this, dayStart())
-            siteMs(site, d, Db.i.webMs(dayStart(), nextDay(dayStart())))
-        }) { used ->
+        if (mode != Mode.FOCUS) async({ usageOn(this, dayStart()).of(site) }) { used ->
             val lim = Prefs.limit(site.id) * MIN
             overLimit = used >= lim
             sub.text = sub.text.toString() + if (overLimit) " · ${fmt(used)} hoje, limite ${fmt(lim)}" else " · ${fmt(used)} de ${fmt(lim)}"
@@ -151,9 +152,9 @@ class InterceptActivity : Activity() {
     private fun buildChoices(c: LinearLayout) {
         c.removeAllViews()
         when (mode) {
-            "focus" -> focusChoices(c)
-            "expired" -> expiredChoices(c)
-            else -> openChoices(c)
+            Mode.FOCUS -> focusChoices(c)
+            Mode.EXPIRED -> expiredChoices(c)
+            Mode.OPEN -> openChoices(c)
         }
     }
 
@@ -166,7 +167,7 @@ class InterceptActivity : Activity() {
         }
         c.add(label("O que você veio fazer?", 20f, 600), top = 24)
         val hint = caption("").apply { visibility = View.GONE }
-        val web = button("Usar a versão web", Btn.SECONDARY) { go("web") }
+        val web = button("Usar a versão web", Btn.SECONDARY) { go(Outcome.WEB) }
         val appRow = vbox()
         val gated = listOf<View>(web, appRow)
         gated.forEach { it.enable(false) }
@@ -181,7 +182,7 @@ class InterceptActivity : Activity() {
         }, top = 12)
         c.add(hint, top = 12)
 
-        c.add(button("Não abrir agora") { leave("dismiss") }, top = 28)
+        c.add(button("Não abrir agora") { leave(Outcome.DISMISS) }, top = 28)
         if (site.web) c.add(web, top = 10)
 
         appRow.add(caption("ou abrir o app por").apply { gravity = Gravity.CENTER }, top = 18)
@@ -189,7 +190,7 @@ class InterceptActivity : Activity() {
         appRow.add(chips(mins.map { "$it min" }) { sel ->
             if (!appRow.isEnabled) return@chips
             val m = mins[sel.first()]
-            if (overLimit) confirmPhrase("Você passou do limite de hoje") { allow(m, "app") } else allow(m, "app")
+            if (overLimit) confirmPhrase("Você passou do limite de hoje") { allow(m, Outcome.APP) } else allow(m, Outcome.APP)
         }.apply { setPadding(0, 0, 0, 0) }, top = 8, w = WRAP, gravity = Gravity.CENTER_HORIZONTAL)
         c.add(appRow)
     }
@@ -199,10 +200,10 @@ class InterceptActivity : Activity() {
         var mood: Int? = null
         c.add(chips(listOf("Melhor", "Igual", "Pior")) { mood = 3 - it.first() }, top = 12, w = WRAP, gravity = Gravity.CENTER_HORIZONTAL)
         fun saveMood() { if (!preview) mood?.let { Db.i.logSession(site.id, "app", 0, it, null, 0) } }
-        c.add(button("Sair") { saveMood(); leave("expired_exit") }, top = 28)
+        c.add(button("Sair") { saveMood(); leave(Outcome.EXPIRED_EXIT) }, top = 28)
         c.add(button("Mais 5 minutos", Btn.SECONDARY) {
             saveMood()
-            if (overLimit) confirmPhrase("Você passou do limite de hoje") { allow(5, "expired_more") } else allow(5, "expired_more")
+            if (overLimit) confirmPhrase("Você passou do limite de hoje") { allow(5, Outcome.EXPIRED_MORE) } else allow(5, Outcome.EXPIRED_MORE)
         }, top = 10)
     }
 
@@ -210,12 +211,12 @@ class InterceptActivity : Activity() {
         val left = Prefs.focusUntil - now()
         c.add(label("Faltam ${fmt(left + MIN - 1)}.", 22f, 600).apply { gravity = Gravity.CENTER })
         c.add(caption("${site.name} pode esperar. O que você estava fazendo antes?").apply { gravity = Gravity.CENTER }, top = 6)
-        c.add(button("Voltar") { leave("blocked") }, top = 28)
+        c.add(button("Voltar") { leave(Outcome.BLOCKED) }, top = 28)
         c.add(button("Encerrar o foco", Btn.TEXT) {
             confirmPhrase("Encerrar o foco?") {
                 Prefs.focusUntil = 0
-                log("focus_end")
-                setup(intent.putExtra("mode", "open"))
+                log(Outcome.FOCUS_END)
+                setup(intent.putExtra("mode", Mode.OPEN.name))
             }
         }, top = 6)
     }

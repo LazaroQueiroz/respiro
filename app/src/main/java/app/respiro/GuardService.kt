@@ -46,10 +46,10 @@ class GuardService : AccessibilityService() {
         if (site.id in Prefs.noIntercept) return
         val t = now()
         if (interceptVisible || t - lastLaunch < 1500) return
-        if (Prefs.focusActive()) { launch(site, "focus", pkg); return }
+        if (Prefs.focusActive()) { launch(site, InterceptActivity.Mode.FOCUS, pkg); return }
         val pass = Prefs.pass(site.id)
         if (pass > t) { arm(site, pass); return }
-        launch(site, "open", pkg)
+        launch(site, InterceptActivity.Mode.OPEN, pkg)
     }
 
     /** Agenda a checagem de quando o passe expira; se o app ainda estiver na frente, intercepta. */
@@ -57,17 +57,17 @@ class GuardService : AccessibilityService() {
         if (pkg != null) current = pkg
         h.removeCallbacksAndMessages(null)
         h.postDelayed({
-            if (current in site.pkgs && Prefs.pass(site.id) <= now()) launch(site, "expired", current)
+            if (current in site.pkgs && Prefs.pass(site.id) <= now()) launch(site, InterceptActivity.Mode.EXPIRED, current)
         }, until - now() + 500)
     }
 
-    private fun launch(site: Site, mode: String, pkg: String?) {
+    private fun launch(site: Site, mode: InterceptActivity.Mode, pkg: String?) {
         lastLaunch = now()
         startActivity(
             Intent(this, InterceptActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
                 .putExtra("site", site.id)
-                .putExtra("mode", mode)
+                .putExtra("mode", mode.name)
                 .putExtra("pkg", pkg),
         )
     }

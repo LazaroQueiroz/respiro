@@ -72,6 +72,26 @@ fun dayLetter(t: Long) = Calendar.getInstance().run { timeInMillis = t; DAY_LETT
 fun dateLabel(t: Long = now()): String = SimpleDateFormat("EEEE, d 'de' MMMM", PT).format(t)
 fun isSunday() = Calendar.getInstance().get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY
 
+/** O que aconteceu depois de uma tentativa de abrir um app (coluna opens.outcome). */
+object Outcome {
+    const val DISMISS = "dismiss"           // tocou em "Não abrir"
+    const val LEFT = "left"                 // saiu da pausa sem decidir (Home, tela apagada…)
+    const val BLOCKED = "blocked"           // modo foco
+    const val WEB = "web"                   // foi para a versão web
+    const val APP = "app"                   // abriu o app nativo por alguns minutos
+    const val EXPIRED_EXIT = "expired_exit" // tempo acabou e saiu
+    const val EXPIRED_MORE = "expired_more" // tempo acabou e pediu mais
+    const val FOCUS_END = "focus_end"       // encerrou o foco antes da hora
+
+    /** Resultados que contam como "abertura evitada". */
+    val GAVE_UP = setOf(DISMISS, LEFT, BLOCKED)
+    /** Resultados que são uma tentativa nova de abrir (não a continuação de um passe). */
+    val ATTEMPTS = setOf(DISMISS, LEFT, BLOCKED, WEB, APP)
+}
+
+fun Map<String, Int>.gaveUp() = Outcome.GAVE_UP.sumOf { this[it] ?: 0 }
+fun Map<String, Int>.attempts() = Outcome.ATTEMPTS.sumOf { this[it] ?: 0 }
+
 val INTENTIONS = listOf("Responder alguém", "Postar algo", "Buscar algo", "Trabalho/estudo", "Tédio", "Hábito", "Ansiedade/fuga")
 val IMPULSIVE = setOf("Tédio", "Hábito", "Ansiedade/fuga")
 
@@ -81,26 +101,36 @@ object Prefs {
     lateinit var sp: SharedPreferences
     fun init(c: Context) { sp = c.getSharedPreferences("respiro", Context.MODE_PRIVATE) }
 
-    private fun int(k: String, d: Int) = object : ReadWriteProperty<Any?, Int> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getInt(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) = sp.edit().putInt(k, value).apply()
+    /** Uma preferência persistida: lê e grava no SharedPreferences conforme o tipo do valor padrão. */
+    private class Pref<T>(val key: String, val default: T) : ReadWriteProperty<Any?, T> {
+        @Suppress("UNCHECKED_CAST")
+        override fun getValue(thisRef: Any?, property: KProperty<*>): T = when (default) {
+            is Int -> sp.getInt(key, default)
+            is Long -> sp.getLong(key, default)
+            is Boolean -> sp.getBoolean(key, default)
+            is String -> sp.getString(key, default)
+            is Set<*> -> sp.getStringSet(key, default as Set<String>)?.toSet()
+            else -> error("tipo não suportado")
+        } as T
+
+        @Suppress("UNCHECKED_CAST")
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+            val e = sp.edit()
+            when (value) {
+                is Int -> e.putInt(key, value)
+                is Long -> e.putLong(key, value)
+                is Boolean -> e.putBoolean(key, value)
+                is String -> e.putString(key, value)
+                is Set<*> -> e.putStringSet(key, value as Set<String>)
+            }
+            e.apply()
+        }
     }
-    private fun long(k: String, d: Long) = object : ReadWriteProperty<Any?, Long> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getLong(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) = sp.edit().putLong(k, value).apply()
-    }
-    private fun bool(k: String, d: Boolean) = object : ReadWriteProperty<Any?, Boolean> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getBoolean(k, d)
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) = sp.edit().putBoolean(k, value).apply()
-    }
-    private fun str(k: String, d: String) = object : ReadWriteProperty<Any?, String> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>) = sp.getString(k, d) ?: d
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: String) = sp.edit().putString(k, value).apply()
-    }
-    private fun set(k: String) = object : ReadWriteProperty<Any?, Set<String>> {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): Set<String> = sp.getStringSet(k, emptySet())!!.toSet()
-        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Set<String>) = sp.edit().putStringSet(k, value).apply()
-    }
+    private fun int(k: String, d: Int) = Pref(k, d)
+    private fun long(k: String, d: Long) = Pref(k, d)
+    private fun bool(k: String, d: Boolean) = Pref(k, d)
+    private fun str(k: String, d: String) = Pref(k, d)
+    private fun set(k: String) = Pref(k, emptySet<String>())
 
     var goalMin by int("goal", 60)
     var grayscale by bool("gray", true)
@@ -322,8 +352,11 @@ class Db(c: Context) : SQLiteOpenHelper(c, "respiro.db", null, 1) {
         })
     }
 
+    /** Lista SQL dos resultados que contam como tentativa de abrir: ('dismiss','left',…). */
+    private val attempts = Outcome.ATTEMPTS.joinToString(",", "(", ")") { "'$it'" }
+
     fun countOpens(site: String, since: Long): Int = DatabaseUtils.longForQuery(
-        readableDatabase, "select count(*) from opens where site=? and ts>=? and outcome not like 'expired%'",
+        readableDatabase, "select count(*) from opens where site=? and ts>=? and outcome in $attempts",
         arrayOf(site, since.toString()),
     ).toInt()
 
@@ -378,7 +411,7 @@ class Db(c: Context) : SQLiteOpenHelper(c, "respiro.db", null, 1) {
     fun hours(since: Long): IntArray {
         val h = IntArray(24)
         val cal = Calendar.getInstance()
-        readableDatabase.rawQuery("select ts from opens where ts>=? and outcome not like 'expired%'", arrayOf(since.toString())).use {
+        readableDatabase.rawQuery("select ts from opens where ts>=? and outcome in $attempts", arrayOf(since.toString())).use {
             while (it.moveToNext()) { cal.timeInMillis = it.getLong(0); h[cal.get(Calendar.HOUR_OF_DAY)]++ }
         }
         return h
@@ -462,6 +495,12 @@ object Usage {
 
     private val skip = setOf("com.android.systemui", "android")
 
+    /**
+     * Tempo de cada app num intervalo, numa única passada pelos eventos (O(n)):
+     * o app "abre" no primeiro ACTIVITY_RESUMED e "fecha" quando a última atividade dele
+     * pausa ou a tela apaga; soma-se o intervalo, recortado ao início do dia.
+     * Começa 3 h antes para pegar apps que já estavam abertos à meia-noite.
+     */
     fun compute(c: Context, start: Long, end: Long): Day {
         if (!granted(c)) return Day(start, emptyMap(), 0, 0)
         val usm = c.getSystemService(UsageStatsManager::class.java)
@@ -503,8 +542,21 @@ object Usage {
     }
 }
 
-/** Tempo de hoje num site: app nativo + versão web no Respiro. */
-fun siteMs(s: Site, day: Usage.Day, web: Map<String, Long>) = day.native(s) + (web[s.id] ?: 0L)
+/** Um dia de uso já somado por rede: app nativo + versão web dentro do Respiro. */
+class DayUsage(val day: Usage.Day, val perSite: Map<String, Long>) {
+    val start get() = day.start
+    val total get() = day.total
+    val pickups get() = day.pickups
+    val social get() = perSite.values.sum()
+    fun of(s: Site) = perSite[s.id] ?: 0L
+}
+
+/** Junta as duas fontes de tempo de um dia: UsageStats (apps) e o banco (sessões web). */
+fun usageOn(c: Context, start: Long): DayUsage {
+    val d = Usage.day(c, start)
+    val web = Db.i.webMs(start, nextDay(start))
+    return DayUsage(d, Sites.all().associate { it.id to d.native(it) + (web[it.id] ?: 0L) })
+}
 
 fun Context.a11yOn(): Boolean {
     val s = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false

@@ -301,9 +301,7 @@ class WebActivity : Activity() {
         col.add(button("Agora não", Btn.TEXT) { finishAndRemoveTask() }, top = 6)
         showOverlay(col)
 
-        async({
-            Usage.day(this, dayStart()).let { siteMs(site, it, Db.i.webMs(dayStart(), nextDay(dayStart()))) }
-        }) { u ->
+        async({ usageOn(this, dayStart()).of(site) }) { u ->
             limitUsed = u
             val lim = Prefs.limit(site.id) * MIN
             val extra = if (u >= lim) "Você já usou ${fmt(u)} hoje — o limite é ${fmt(lim)}." else "Hoje: ${fmt(u)} de ${fmt(lim)}."
