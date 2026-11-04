@@ -122,3 +122,24 @@ Opcional: em **Ajustes → Abrir links no Respiro**, os links das redes passam a
 - Os filtros dependem da estrutura dos sites. Se o Instagram ou o YouTube mudarem o HTML, os seletores em `Core.kt` (`Sites.builtin`) precisam de ajuste.
 - O login do Google pode recusar o WebView.
 - Apps instalados que são "donos" dos próprios links (como X e LinkedIn) continuam recebendo esses links.
+
+## Padrão de commits
+
+[Conventional Commits](https://www.conventionalcommits.org/pt-br/), com a descrição em português e no imperativo:
+
+```
+tipo(escopo): descrição curta
+
+Corpo opcional explicando o porquê.
+```
+
+| Tipo | Uso |
+|---|---|
+| `feat` | funcionalidade nova |
+| `fix` | correção de bug |
+| `perf` | melhoria de desempenho |
+| `refactor` | mudança de código sem mudar comportamento |
+| `docs` | documentação |
+| `chore` | build, dependências, configuração |
+
+Escopos usados: `core`, `web`, `pausa`, `painel`, `ui`, `reflexao`.
