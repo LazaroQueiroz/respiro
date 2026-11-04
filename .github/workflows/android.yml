@@ -1,0 +1,49 @@
+# Compila o app a cada push/PR na main (confere que nada quebrou).
+# Ao receber uma tag v* (ex.: v1.1.0), também assina e publica uma Release com o APK.
+name: Android
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write # necessário só para criar a Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # traz as tags: a versão do app vem delas
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restaurar a chave de release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Compilar
+        run: ./gradlew assembleRelease
+        env:
+          RESPIRO_KEYSTORE: ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/release.jks', runner.temp) || '' }}
+          RESPIRO_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          RESPIRO_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          RESPIRO_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Publicar Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk="respiro-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          gh release create "$GITHUB_REF_NAME" "$apk" --title "Respiro ${GITHUB_REF_NAME}" --generate-notes
