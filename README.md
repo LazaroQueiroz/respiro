@@ -106,6 +106,8 @@ JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew assembleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
+Sem o `keystore.properties`, o build assina com a chave de debug (serve para testar, não para distribuir).
+
 Na primeira abertura, a aba **Hoje** pede três permissões:
 
 1. **Acesso ao uso**, para medir o tempo de tela.
@@ -116,6 +118,42 @@ Opcional: em **Ajustes → Abrir links no Respiro**, os links das redes passam a
 
 > Não use `adb shell am force-stop app.respiro`: o Android desliga a acessibilidade
 > de um app forçado a parar.
+
+## Versões e releases
+
+Publicar uma versão é **só criar uma tag**. O GitHub Actions (`.github/workflows/android.yml`)
+compila, assina e cria a Release com o APK:
+
+```sh
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+| Evento | O que acontece |
+|---|---|
+| push ou PR na `main` | compila para conferir que nada quebrou (não publica nada) |
+| push de tag `v*` | compila, assina com a chave de release e publica a Release com notas geradas dos commits |
+
+A versão vem da tag: `v1.2.3` vira `versionName 1.2.3` e `versionCode 10203`. Use
+[versionamento semântico](https://semver.org/lang/pt-BR/): *patch* para correções, *minor* para
+funcionalidades e *major* para mudanças grandes.
+
+**Compatibilidade:** Android 11 ou mais novo (`minSdk 30`), qualquer processador (o app não tem
+código nativo). Precisa do *Android System WebView*, que vem atualizado em praticamente todos os
+celulares.
+
+**Atualizações automáticas para quem usa:** instale o [Obtainium](https://github.com/ImranR98/Obtainium)
+e adicione o link do repositório. Isso exige que o repositório, ou um repositório só de releases, seja público.
+
+### Chave de assinatura
+
+Todas as versões precisam ser assinadas com **a mesma chave**. Sem ela, quem já instalou não
+consegue atualizar. A chave fica fora do git:
+
+- `~/.android/respiro-release.jks`: a chave. **Faça backup.**
+- `keystore.properties`: o caminho e as senhas (ignorado pelo git).
+- No GitHub: os secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` e `KEY_PASSWORD`,
+  enviados com `scripts/enviar-chave.sh`.
 
 ## Limitações
 
