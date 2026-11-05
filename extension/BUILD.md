@@ -29,19 +29,23 @@ with the system (or `brew install python zip`).
 ## Steps
 
 ```sh
-unzip respiro-extension-1.1.0-source.zip -d respiro
+unzip respiro-extension-<version>-source.zip -d respiro
 cd respiro
-RESPIRO_VERSION=1.1.0 ./scripts/build-extension.sh
+RESPIRO_VERSION=<version> ./scripts/build-extension.sh   # e.g. RESPIRO_VERSION=1.1.3
 ```
 
 Output:
 
 - `build/extension-firefox/`: the exact contents of the submitted add-on
-- `build/respiro-extension-1.1.0-firefox.zip`: the same files, zipped
+- `build/respiro-extension-<version>-firefox.zip`: the same files, zipped
+
+`<version>` is the version of the submitted add-on (the `version` field of its
+`manifest.json`). Inside a git checkout it can be omitted: the script uses the
+latest `v*` tag.
 
 To compare with the submitted package:
 
 ```sh
-mkdir submitted && unzip -q respiro-extension-1.1.0-firefox.zip -d submitted
+mkdir submitted && unzip -q respiro-extension-<version>-firefox.zip -d submitted
 diff -r submitted build/extension-firefox   # no output = identical
 ```
