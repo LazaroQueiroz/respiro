@@ -57,8 +57,8 @@
     "ggpht.com",
     "ytimg.com"
    ],
-   "short": "ytm-reel-shelf-renderer,ytm-shorts-lockup-view-model,ytm-shorts-lockup-view-model-v2,ytm-rich-section-renderer:has(a[href^=\"/shorts\"]),ytm-pivot-bar-item-renderer:has(.pivot-shorts),ytm-pivot-bar-item-renderer:has(a[href^=\"/shorts\"]),a[href^=\"/shorts\"]",
-   "feedCss": "ytm-item-section-renderer[section-identifier=\"related-items\"]",
+   "short": "ytm-reel-shelf-renderer,ytm-shorts-lockup-view-model,ytm-shorts-lockup-view-model-v2,ytm-rich-section-renderer:has(a[href^=\"/shorts\"]),ytm-pivot-bar-item-renderer:has(.pivot-shorts),ytm-pivot-bar-item-renderer:has(a[href^=\"/shorts\"]),a[href^=\"/shorts\"],ytd-reel-shelf-renderer,ytd-rich-shelf-renderer[is-shorts],ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]),grid-shelf-view-model:has(a[href^=\"/shorts\"]),ytd-guide-entry-renderer:has(a[title=\"Shorts\"]),ytd-mini-guide-entry-renderer[aria-label=\"Shorts\"]",
+   "feedCss": "ytm-item-section-renderer[section-identifier=\"related-items\"],#related,ytd-watch-next-secondary-results-renderer,.ytp-endscreen-content,.ytp-ce-element,.ytp-autonav-endscreen-countdown-overlay,.ytp-fullscreen-grid,.ytp-fullscreen-grid-peeking",
    "feedRe": "^/$",
    "search": "https://m.youtube.com/results?search_query=%s",
    "links": [
