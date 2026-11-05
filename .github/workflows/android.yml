@@ -1,5 +1,5 @@
 # Compila o app a cada push/PR na main (confere que nada quebrou).
-# Ao receber uma tag v* (ex.: v1.1.0), também assina e publica uma Release com o APK.
+# Ao receber uma tag v* (ex.: v1.1.0), também assina e publica uma Release com o APK e a extensão.
 name: Android
 
 on:
@@ -39,6 +39,9 @@ jobs:
           RESPIRO_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           RESPIRO_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
+      - name: Montar a extensão
+        run: ./scripts/build-extension.sh
+
       - name: Publicar Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -46,4 +49,5 @@ jobs:
         run: |
           apk="respiro-${GITHUB_REF_NAME}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$apk"
-          gh release create "$GITHUB_REF_NAME" "$apk" --title "Respiro ${GITHUB_REF_NAME}" --generate-notes
+          ext="build/respiro-extension-${GITHUB_REF_NAME#v}.zip"
+          gh release create "$GITHUB_REF_NAME" "$apk" "$ext" --title "Respiro ${GITHUB_REF_NAME}" --generate-notes
