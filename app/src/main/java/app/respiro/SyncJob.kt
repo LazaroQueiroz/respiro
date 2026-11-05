@@ -15,9 +15,10 @@ class SyncJob : JobService() {
     companion object {
         private const val ID = 4201
 
-        fun schedule(c: Context) {
-            val js = c.getSystemService(JobScheduler::class.java) ?: return
-            if (js.getPendingJob(ID) != null) return
+        /** Nunca derruba o app: se o sistema recusar, só fica sem a busca periódica. */
+        fun schedule(c: Context) = runCatching {
+            val js = c.getSystemService(JobScheduler::class.java) ?: return@runCatching
+            if (js.getPendingJob(ID) != null) return@runCatching
             js.schedule(
                 JobInfo.Builder(ID, ComponentName(c, SyncJob::class.java))
                     .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
