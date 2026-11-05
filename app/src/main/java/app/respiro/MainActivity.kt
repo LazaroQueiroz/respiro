@@ -51,7 +51,11 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(o: Bundle) { super.onSaveInstanceState(o); o.putInt("tab", tab) }
 
-    override fun onResume() { super.onResume(); show(tab) }
+    override fun onResume() {
+        super.onResume()
+        show(tab)
+        Sync.poll { show(tab) }
+    }
 
     fun show(i: Int) {
         tab = i
@@ -384,7 +388,7 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
                 add(tile("${gaveUp * 100 / tries}%", "desistências"), w = 0, weight = 1f)
             })
             add(hbox {
-                add(tile("${o[Outcome.WEB] ?: 0}", "foram para a web"), w = 0, weight = 1f)
+                add(tile("${(o[Outcome.WEB] ?: 0) + (o[Outcome.BROWSER_WEB] ?: 0)}", "foram para a web"), w = 0, weight = 1f)
                 add(tile("${o[Outcome.APP] ?: 0}", "abriram o app"), w = 0, weight = 1f)
             }, top = 16)
             add(caption("No estudo do one sec, só a pausa fez as pessoas desistirem de 36% das aberturas.", 12f), top = 14)
@@ -471,7 +475,7 @@ fun MainActivity.settingsTab(): View {
     group("Permissões") {
         add(row("Acesso ao uso", if (Usage.granted(this@settingsTab)) "Ativo" else "Desativado") { openUsageSettings() })
         add(divider(), h = 1)
-        add(row("Pausa ao abrir apps", if (a11yOn()) "Ativo" else "Desativado") { openA11ySettings() })
+        add(row("Pausa ao abrir apps e sites", if (a11yOn()) "Ativo · inclui as redes abertas no navegador" else "Desativado") { openA11ySettings() })
         add(divider(), h = 1)
         add(row("Notificações", if (notifOk()) "Ativo" else "Desativado") { askNotif() })
         add(divider(), h = 1)
@@ -534,6 +538,19 @@ fun MainActivity.settingsTab(): View {
         add(row("Responder agora") { startActivity(Intent(this@settingsTab, ReflectionActivity::class.java)) })
     }
 
+    group("Extensão do navegador") {
+        if (Sync.paired) {
+            val last = Sync.lastSync
+            add(row("Conectada", if (last > 0) "Última sincronização: ${java.text.SimpleDateFormat("d/M HH:mm", PT).format(last)}" else "Aguardando a extensão"))
+            add(divider(), h = 1)
+            add(row("Código de conexão", "Cole na extensão para conectar outro navegador.") { shareText(Sync.code()) })
+            add(divider(), h = 1)
+            add(row("Desconectar") { Sync.unpair(); refresh() })
+        } else {
+            add(row("Conectar extensão", "Ajustes e sites iguais no celular e no computador, via ntfy.sh, cifrados.") { syncDialog() })
+        }
+    }
+
     group("Testar") {
         add(row("Ver a tela de pausa", "Prévia com o YouTube — nada é registrado.") {
             startActivity(
@@ -566,7 +583,7 @@ fun MainActivity.settingsTab(): View {
             add(caption(d, 13f), top = 3)
         }
     }, top = 10)
-    col.add(caption("Respiro 1.0 · sem anúncios, sem contas, nada sai do seu celular.", 12f).apply { gravity = Gravity.CENTER }, top = 24)
+    col.add(caption("Respiro ${packageManager.getPackageInfo(packageName, 0).versionName} · sem anúncios, sem contas. Só os ajustes saem do celular, cifrados, se você conectar a extensão.", 12f).apply { gravity = Gravity.CENTER }, top = 24)
     return scroll(col)
 }
 
@@ -634,4 +651,32 @@ private fun MainActivity.extraAppsDialog() {
         .setNegativeButton("Cancelar", null)
         .setPositiveButton("Salvar") { _, _ -> Prefs.extraApps = sel; Sites.reload(); refresh() }
         .show()
+}
+
+private fun MainActivity.shareText(text: String) {
+    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Código de conexão"))
+}
+
+/** Conectar à extensão: gerar um código aqui (e colar na extensão) ou colar o código gerado na extensão. */
+private fun MainActivity.syncDialog() {
+    val input = android.widget.EditText(this).apply {
+        hint = "RESPIRO1:…"; isSingleLine = true
+        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+    }
+    val box = vbox(22) {
+        add(caption("Os ajustes passam pelo ntfy.sh, cifrados com uma chave que só os seus aparelhos têm."))
+        add(caption("Já tem um código da extensão? Cole aqui:"), top = 12)
+        add(input, top = 6)
+    }
+    android.app.AlertDialog.Builder(this).setTitle("Conectar extensão").setView(box)
+        .setNegativeButton("Cancelar", null)
+        .setNeutralButton("Gerar código") { _, _ ->
+            Sync.pair(Sync.newCode())
+            shareText(Sync.code())
+            refresh()
+        }
+        .setPositiveButton("Conectar") { _, _ ->
+            if (!Sync.pair(input.text.toString())) android.widget.Toast.makeText(this, "Código inválido", android.widget.Toast.LENGTH_SHORT).show()
+            refresh()
+        }.show()
 }
