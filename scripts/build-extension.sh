@@ -17,12 +17,13 @@ cp "$assets/sites.json" extension/sites.json
   echo '};'
 } > extension/filter.js
 
-version=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null | sed 's/^v//' || true)
+# Versão: RESPIRO_VERSION, se definida (ex.: build fora do git); senão, a última tag v*.
+version=${RESPIRO_VERSION:-$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null | sed 's/^v//' || true)}
 version=${version:-0.0.0}
 out=build/extension
 rm -rf "$out" && mkdir -p "$out"
 cp -r extension/. "$out/"
-rm -f "$out/icons/icon.svg"
+rm -f "$out/icons/icon.svg" "$out/BUILD.md"
 python3 -I - "$out/manifest.json" "$version" <<'PY'
 import json, sys
 p, v = sys.argv[1], sys.argv[2]
