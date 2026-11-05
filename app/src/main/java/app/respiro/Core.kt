@@ -30,6 +30,7 @@ class App : Application() {
         Prefs.init(this)
         Db.init(this)
         Sites.app = this
+        Sync.init()
     }
 }
 
@@ -78,6 +79,7 @@ object Outcome {
     const val LEFT = "left"                 // saiu da pausa sem decidir (Home, tela apagada…)
     const val BLOCKED = "blocked"           // modo foco
     const val WEB = "web"                   // foi para a versão web
+    const val BROWSER_WEB = "browser_web"   // abriu no navegador e foi para a versão filtrada
     const val APP = "app"                   // abriu o app nativo por alguns minutos
     const val EXPIRED_EXIT = "expired_exit" // tempo acabou e saiu
     const val EXPIRED_MORE = "expired_more" // tempo acabou e pediu mais
@@ -86,7 +88,7 @@ object Outcome {
     /** Resultados que contam como "abertura evitada". */
     val GAVE_UP = setOf(DISMISS, LEFT, BLOCKED)
     /** Resultados que são uma tentativa nova de abrir (não a continuação de um passe). */
-    val ATTEMPTS = setOf(DISMISS, LEFT, BLOCKED, WEB, APP)
+    val ATTEMPTS = setOf(DISMISS, LEFT, BLOCKED, WEB, APP, BROWSER_WEB)
 }
 
 fun Map<String, Int>.gaveUp() = Outcome.GAVE_UP.sumOf { this[it] ?: 0 }
@@ -172,6 +174,8 @@ class Site(
     val url: String,
     val pkgs: List<String> = emptyList(),
     val hosts: List<String> = emptyList(),
+    /** Domínios do próprio site (sem CDNs nem domínios compartilhados como google.com): detecção no navegador. */
+    val own: List<String> = emptyList(),
     /** Seletores CSS de vídeos curtos (Reels/Shorts) a esconder. */
     val short: String = "",
     /** Seletores extras escondidos junto com o feed (ex.: recomendados). */
@@ -196,82 +200,22 @@ object Sites {
     private var cache: List<Site>? = null
     private var byPkg: Map<String, Site> = emptyMap()
 
-    val builtin = listOf(
-        Site(
-            "instagram", "Instagram", "https://www.instagram.com/",
-            listOf("com.instagram.android", "com.instagram.lite"),
-            listOf("instagram.com", "cdninstagram.com", "facebook.com", "fbcdn.net"),
-            short = "a[href=\"/reels/\"],a[href^=\"/reels/\"],a[href=\"/explore/\"]",
-            feedRe = "^/$",
-            blockRe = "^/reels/?$|^/explore/?$",
-            reelRe = "^/(?:[\\w.]+/)?reels?/([\\w-]+)",
-            links = listOf("Mensagens" to "/direct/inbox/", "Pesquisar" to "/explore/search/", "Notificações" to "/notifications/"),
-        ),
-        Site(
-            "youtube", "YouTube", "https://m.youtube.com/",
-            listOf("com.google.android.youtube"),
-            listOf("youtube.com", "youtu.be", "google.com", "gstatic.com", "googleusercontent.com", "ggpht.com", "ytimg.com"),
-            short = "ytm-reel-shelf-renderer,ytm-shorts-lockup-view-model,ytm-shorts-lockup-view-model-v2," +
-                "ytm-rich-section-renderer:has(a[href^=\"/shorts\"]),ytm-pivot-bar-item-renderer:has(.pivot-shorts)," +
-                "ytm-pivot-bar-item-renderer:has(a[href^=\"/shorts\"]),a[href^=\"/shorts\"]",
-            feedCss = "ytm-item-section-renderer[section-identifier=\"related-items\"]",
-            feedRe = "^/$",
-            search = "https://m.youtube.com/results?search_query=%s",
-            links = listOf("Inscrições" to "/feed/subscriptions", "Você" to "/feed/you"),
-        ),
-        Site(
-            "tiktok", "TikTok", "https://www.tiktok.com/",
-            listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.zhiliaoapp.musically.go"),
-            listOf("tiktok.com", "tiktokcdn.com", "tiktokv.com", "ttwstatic.com"),
-            feedRe = "^/(foryou|explore|following|friends)?/?$",
-            reelRe = "^/@[\\w.-]+/video/(\\d+)",
-            search = "https://www.tiktok.com/search?q=%s",
-            links = listOf("Mensagens" to "/messages", "Perfil" to "/profile"),
-        ),
-        Site(
-            "x", "X", "https://x.com/home",
-            listOf("com.twitter.android"),
-            listOf("x.com", "twitter.com", "twimg.com", "t.co"),
-            feedRe = "^/(home|explore)/?$",
-            search = "https://x.com/search?q=%s",
-            links = listOf("Mensagens" to "/messages", "Notificações" to "/notifications"),
-        ),
-        Site(
-            "threads", "Threads", "https://www.threads.com/",
-            listOf("com.instagram.barcelona"),
-            listOf("threads.com", "threads.net", "instagram.com", "cdninstagram.com", "fbcdn.net"),
-            feedRe = "^/$",
-            search = "https://www.threads.com/search?q=%s",
-            links = listOf("Atividade" to "/activity"),
-        ),
-        Site(
-            "facebook", "Facebook", "https://m.facebook.com/",
-            listOf("com.facebook.katana", "com.facebook.lite"),
-            listOf("facebook.com", "fbcdn.net", "fb.com"),
-            short = "a[href*=\"/reel\"],a[href^=\"/watch\"]",
-            feedRe = "^/(home\\.php)?/?$",
-            blockRe = "^/(reel|reels|watch)/?$",
-            reelRe = "^/reels?/(\\d+)",
-            search = "https://m.facebook.com/search/top/?q=%s",
-            links = listOf("Notificações" to "/notifications.php", "Grupos" to "/groups/", "Marketplace" to "/marketplace/"),
-        ),
-        Site(
-            "reddit", "Reddit", "https://www.reddit.com/",
-            listOf("com.reddit.frontpage"),
-            listOf("reddit.com", "redd.it", "redditmedia.com", "redditstatic.com"),
-            feedRe = "^/(best|hot|new|top|rising|r/popular|r/all)?/?$",
-            search = "https://www.reddit.com/search/?q=%s",
-            links = listOf("Notificações" to "/notifications", "Chat" to "https://chat.reddit.com/"),
-        ),
-        Site(
-            "linkedin", "LinkedIn", "https://www.linkedin.com/feed/",
-            listOf("com.linkedin.android"),
-            listOf("linkedin.com", "licdn.com"),
-            feedRe = "^/feed/?$",
-            search = "https://www.linkedin.com/search/results/all/?keywords=%s",
-            links = listOf("Mensagens" to "/messaging/", "Vagas" to "/jobs/", "Notificações" to "/notifications/", "Minha rede" to "/mynetwork/"),
-        ),
-    )
+    /** Redes embutidas, lidas de assets/sites.json (o mesmo arquivo que a extensão usa). */
+    val builtin: List<Site> by lazy {
+        val a = JSONObject(app.assets.open("sites.json").bufferedReader().use { it.readText() }).getJSONArray("sites")
+        (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            fun list(k: String) = o.optJSONArray(k)?.let { j -> (0 until j.length()).map { j.getString(it) } } ?: emptyList()
+            fun opt(k: String) = if (o.has(k)) o.getString(k) else null
+            Site(
+                o.getString("id"), o.getString("name"), o.getString("url"),
+                pkgs = list("pkgs"), hosts = list("hosts"), own = list("own"),
+                short = o.optString("short"), feedCss = o.optString("feedCss"),
+                feedRe = opt("feedRe"), blockRe = opt("blockRe"), search = opt("search"), reelRe = opt("reelRe"),
+                links = o.optJSONArray("links")?.let { j -> (0 until j.length()).map { j.getJSONArray(it).let { p -> p.getString(0) to p.getString(1) } } } ?: emptyList(),
+            )
+        }
+    }
 
     fun all(): List<Site> {
         cache?.let { return it }
@@ -291,6 +235,12 @@ object Sites {
         return web.firstOrNull { h == it.domain || h.endsWith(".${it.domain}") } ?: web.firstOrNull { it.allows(host) }
     }
     fun byPkg(p: String): Site? { all(); return byPkg[p] }
+
+    /** Site aberto num navegador: só pelos domínios próprios, para não pegar google.com como YouTube. */
+    fun forBrowserHost(host: String): Site? {
+        val h = host.lowercase().removePrefix("www.")
+        return all().firstOrNull { s -> s.web && (s.own.ifEmpty { listOf(s.domain) }).any { h == it || h.endsWith(".$it") } }
+    }
     fun webSites() = all().filter { it.web && it.id !in Prefs.hidden }
 
     private fun custom(): List<Site> = runCatching {

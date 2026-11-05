@@ -1,0 +1,267 @@
+{
+ "_": "Redes embutidas. Fonte única para o app (Core.kt, Sites) e a extensão. own: domínios do próprio site (detecção no navegador); hosts: todos os domínios que a versão filtrada pode carregar.",
+ "sites": [
+  {
+   "id": "instagram",
+   "name": "Instagram",
+   "url": "https://www.instagram.com/",
+   "pkgs": [
+    "com.instagram.android",
+    "com.instagram.lite"
+   ],
+   "own": [
+    "instagram.com"
+   ],
+   "hosts": [
+    "instagram.com",
+    "cdninstagram.com",
+    "facebook.com",
+    "fbcdn.net"
+   ],
+   "short": "a[href=\"/reels/\"],a[href^=\"/reels/\"],a[href=\"/explore/\"]",
+   "feedRe": "^/$",
+   "blockRe": "^/reels/?$|^/explore/?$",
+   "reelRe": "^/(?:[\\w.]+/)?reels?/([\\w-]+)",
+   "links": [
+    [
+     "Mensagens",
+     "/direct/inbox/"
+    ],
+    [
+     "Pesquisar",
+     "/explore/search/"
+    ],
+    [
+     "Notificações",
+     "/notifications/"
+    ]
+   ]
+  },
+  {
+   "id": "youtube",
+   "name": "YouTube",
+   "url": "https://m.youtube.com/",
+   "pkgs": [
+    "com.google.android.youtube"
+   ],
+   "own": [
+    "youtube.com",
+    "youtu.be"
+   ],
+   "hosts": [
+    "youtube.com",
+    "youtu.be",
+    "google.com",
+    "gstatic.com",
+    "googleusercontent.com",
+    "ggpht.com",
+    "ytimg.com"
+   ],
+   "short": "ytm-reel-shelf-renderer,ytm-shorts-lockup-view-model,ytm-shorts-lockup-view-model-v2,ytm-rich-section-renderer:has(a[href^=\"/shorts\"]),ytm-pivot-bar-item-renderer:has(.pivot-shorts),ytm-pivot-bar-item-renderer:has(a[href^=\"/shorts\"]),a[href^=\"/shorts\"]",
+   "feedCss": "ytm-item-section-renderer[section-identifier=\"related-items\"]",
+   "feedRe": "^/$",
+   "search": "https://m.youtube.com/results?search_query=%s",
+   "links": [
+    [
+     "Inscrições",
+     "/feed/subscriptions"
+    ],
+    [
+     "Você",
+     "/feed/you"
+    ]
+   ]
+  },
+  {
+   "id": "tiktok",
+   "name": "TikTok",
+   "url": "https://www.tiktok.com/",
+   "pkgs": [
+    "com.zhiliaoapp.musically",
+    "com.ss.android.ugc.trill",
+    "com.zhiliaoapp.musically.go"
+   ],
+   "own": [
+    "tiktok.com"
+   ],
+   "hosts": [
+    "tiktok.com",
+    "tiktokcdn.com",
+    "tiktokv.com",
+    "ttwstatic.com"
+   ],
+   "feedRe": "^/(foryou|explore|following|friends)?/?$",
+   "reelRe": "^/@[\\w.-]+/video/(\\d+)",
+   "search": "https://www.tiktok.com/search?q=%s",
+   "links": [
+    [
+     "Mensagens",
+     "/messages"
+    ],
+    [
+     "Perfil",
+     "/profile"
+    ]
+   ]
+  },
+  {
+   "id": "x",
+   "name": "X",
+   "url": "https://x.com/home",
+   "pkgs": [
+    "com.twitter.android"
+   ],
+   "own": [
+    "x.com",
+    "twitter.com"
+   ],
+   "hosts": [
+    "x.com",
+    "twitter.com",
+    "twimg.com",
+    "t.co"
+   ],
+   "feedRe": "^/(home|explore)/?$",
+   "search": "https://x.com/search?q=%s",
+   "links": [
+    [
+     "Mensagens",
+     "/messages"
+    ],
+    [
+     "Notificações",
+     "/notifications"
+    ]
+   ]
+  },
+  {
+   "id": "threads",
+   "name": "Threads",
+   "url": "https://www.threads.com/",
+   "pkgs": [
+    "com.instagram.barcelona"
+   ],
+   "own": [
+    "threads.com",
+    "threads.net"
+   ],
+   "hosts": [
+    "threads.com",
+    "threads.net",
+    "instagram.com",
+    "cdninstagram.com",
+    "fbcdn.net"
+   ],
+   "feedRe": "^/$",
+   "search": "https://www.threads.com/search?q=%s",
+   "links": [
+    [
+     "Atividade",
+     "/activity"
+    ]
+   ]
+  },
+  {
+   "id": "facebook",
+   "name": "Facebook",
+   "url": "https://m.facebook.com/",
+   "pkgs": [
+    "com.facebook.katana",
+    "com.facebook.lite"
+   ],
+   "own": [
+    "facebook.com",
+    "fb.watch"
+   ],
+   "hosts": [
+    "facebook.com",
+    "fbcdn.net",
+    "fb.com"
+   ],
+   "short": "a[href*=\"/reel\"],a[href^=\"/watch\"]",
+   "feedRe": "^/(home\\.php)?/?$",
+   "blockRe": "^/(reel|reels|watch)/?$",
+   "reelRe": "^/reels?/(\\d+)",
+   "search": "https://m.facebook.com/search/top/?q=%s",
+   "links": [
+    [
+     "Notificações",
+     "/notifications.php"
+    ],
+    [
+     "Grupos",
+     "/groups/"
+    ],
+    [
+     "Marketplace",
+     "/marketplace/"
+    ]
+   ]
+  },
+  {
+   "id": "reddit",
+   "name": "Reddit",
+   "url": "https://www.reddit.com/",
+   "pkgs": [
+    "com.reddit.frontpage"
+   ],
+   "own": [
+    "reddit.com",
+    "redd.it"
+   ],
+   "hosts": [
+    "reddit.com",
+    "redd.it",
+    "redditmedia.com",
+    "redditstatic.com"
+   ],
+   "feedRe": "^/(best|hot|new|top|rising|r/popular|r/all)?/?$",
+   "search": "https://www.reddit.com/search/?q=%s",
+   "links": [
+    [
+     "Notificações",
+     "/notifications"
+    ],
+    [
+     "Chat",
+     "https://chat.reddit.com/"
+    ]
+   ]
+  },
+  {
+   "id": "linkedin",
+   "name": "LinkedIn",
+   "url": "https://www.linkedin.com/feed/",
+   "pkgs": [
+    "com.linkedin.android"
+   ],
+   "own": [
+    "linkedin.com"
+   ],
+   "hosts": [
+    "linkedin.com",
+    "licdn.com"
+   ],
+   "feedRe": "^/feed/?$",
+   "search": "https://www.linkedin.com/search/results/all/?keywords=%s",
+   "links": [
+    [
+     "Mensagens",
+     "/messaging/"
+    ],
+    [
+     "Vagas",
+     "/jobs/"
+    ],
+    [
+     "Notificações",
+     "/notifications/"
+    ],
+    [
+     "Minha rede",
+     "/mynetwork/"
+    ]
+   ]
+  }
+ ]
+}

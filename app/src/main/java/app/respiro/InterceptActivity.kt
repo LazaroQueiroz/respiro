@@ -29,6 +29,8 @@ class InterceptActivity : Activity() {
     private lateinit var site: Site
     private var mode = Mode.OPEN
     private var pkg: String? = null
+    /** Veio de um navegador: a rede só abre na versão filtrada, dentro do Respiro. */
+    private var browserUrl: String? = null
     private var intention: String? = null
     private var delay = 0
     private var decided = false
@@ -72,6 +74,7 @@ class InterceptActivity : Activity() {
         site = Sites.byId(i.getStringExtra("site") ?: "") ?: run { finish(); return }
         mode = runCatching { Mode.valueOf(i.getStringExtra("mode")!!) }.getOrDefault(Mode.OPEN)
         pkg = i.getStringExtra("pkg")
+        browserUrl = i.getStringExtra("browserUrl")
         preview = i.getBooleanExtra("preview", false)
         if (mode == Mode.OPEN && Prefs.focusActive()) mode = Mode.FOCUS
         intention = null
@@ -92,7 +95,8 @@ class InterceptActivity : Activity() {
             when (mode) {
                 Mode.FOCUS -> "Modo foco"
                 Mode.EXPIRED -> "Seu tempo acabou"
-                Mode.OPEN -> "${opens + 1}ª vez hoje" + if (Prefs.restNow()) " · horário de descanso" else ""
+                Mode.OPEN -> "${opens + 1}ª vez hoje" + (if (browserUrl != null) " · no navegador" else "") +
+                    if (Prefs.restNow()) " · horário de descanso" else ""
             },
         ).apply { gravity = Gravity.CENTER }
         col.add(sub, top = 4)
@@ -154,17 +158,12 @@ class InterceptActivity : Activity() {
         when (mode) {
             Mode.FOCUS -> focusChoices(c)
             Mode.EXPIRED -> expiredChoices(c)
-            Mode.OPEN -> openChoices(c)
+            Mode.OPEN -> if (browserUrl != null) browserChoices(c) else openChoices(c)
         }
     }
 
     private fun openChoices(c: LinearLayout) {
-        if (Prefs.planIf.isNotBlank() && Prefs.planThen.isNotBlank()) {
-            c.add(card {
-                add(section("Seu plano"))
-                add(label("Se ${Prefs.planIf}, então ${Prefs.planThen}.", 16f, 500), top = 6)
-            }, top = 0)
-        }
+        plan(c)
         c.add(label("O que você veio fazer?", 20f, 600), top = 24)
         val hint = caption("").apply { visibility = View.GONE }
         val web = button("Usar a versão web", Btn.SECONDARY) { go(Outcome.WEB) }
@@ -193,6 +192,38 @@ class InterceptActivity : Activity() {
             if (overLimit) confirmPhrase("Você passou do limite de hoje") { allow(m, Outcome.APP) } else allow(m, Outcome.APP)
         }.apply { setPadding(0, 0, 0, 0) }, top = 8, w = WRAP, gravity = Gravity.CENTER_HORIZONTAL)
         c.add(appRow)
+    }
+
+    /** Aberto num navegador: a opção principal é a versão filtrada no Respiro; não há passe no navegador. */
+    private fun browserChoices(c: LinearLayout) {
+        plan(c)
+        c.add(label("O que você veio fazer?", 20f, 600), top = 24)
+        val hint = caption("").apply { visibility = View.GONE }
+        val open = button("Abrir no Respiro") {
+            if (overLimit) confirmPhrase("Você passou do limite de hoje") { go(Outcome.BROWSER_WEB) } else go(Outcome.BROWSER_WEB)
+        }
+        open.enable(false)
+        c.add(chips(INTENTIONS) { sel ->
+            intention = INTENTIONS[sel.first()]
+            open.enable(true)
+            if (intention in IMPULSIVE) {
+                hint.text = "Percebido. Que tal 2 minutos sem tela? Beba água, alongue, olhe pela janela."
+                hint.fadeIn()
+            } else hint.visibility = View.GONE
+        }, top = 12)
+        c.add(hint, top = 12)
+        c.add(open, top = 28)
+        c.add(caption("Sem feed infinito e sem vídeos curtos.").apply { gravity = Gravity.CENTER }, top = 6)
+        c.add(button("Não abrir agora", Btn.SECONDARY) { leave(Outcome.DISMISS) }, top = 14)
+    }
+
+    private fun plan(c: LinearLayout) {
+        if (Prefs.planIf.isNotBlank() && Prefs.planThen.isNotBlank()) {
+            c.add(card {
+                add(section("Seu plano"))
+                add(label("Se ${Prefs.planIf}, então ${Prefs.planThen}.", 16f, 500), top = 6)
+            }, top = 0)
+        }
     }
 
     private fun expiredChoices(c: LinearLayout) {
@@ -238,7 +269,8 @@ class InterceptActivity : Activity() {
         startActivity(
             Intent(this, WebActivity::class.java)
                 .setData(Uri.parse("respiro://site/${site.id}"))
-                .putExtra("intention", intention),
+                .putExtra("intention", intention)
+                .apply { browserUrl?.let { putExtra("url", it) } },
         )
         finish()
     }
