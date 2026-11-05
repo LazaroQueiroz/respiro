@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Respiro · ajustes</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  main { max-width: 560px; }
+  .row .t b { font-size: 15px; }
+  #code { margin-top: 10px; font-family: ui-monospace, monospace; font-size: 13px; }
+  .inline { display: flex; gap: 8px; margin-top: 10px; }
+  .inline > * { margin: 0 !important; }
+  .inline input { flex: 1; }
+  .inline button { width: auto; }
+  .rm { width: auto; padding: 8px 12px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ajustes</h1>
+  <p class="mu">Valem para este navegador. Conectado ao app, ficam iguais no celular.</p>
+
+  <div class="k">App no celular</div>
+  <div class="card" id="sync"></div>
+
+  <div class="k">Metas</div>
+  <div class="card rows">
+    <div class="row"><div class="t"><b>Meta diária em redes</b><span>em minutos</span></div><input type="number" min="15" max="300" step="15" data-k="goal"></div>
+  </div>
+
+  <div class="k">Redes e sites</div>
+  <div class="card rows" id="sites"></div>
+  <div class="inline">
+    <input type="text" id="newName" placeholder="Nome (ex.: Pinterest)">
+    <input type="text" id="newUrl" placeholder="pinterest.com">
+    <button id="add">Adicionar</button>
+  </div>
+  <p class="mu">Sites adicionados têm pausa e tempo; os filtros de feed valem só para as redes da lista.</p>
+
+  <div class="k">Navegação</div>
+  <div class="card rows">
+    <div class="row"><div class="t"><b>Tons de cinza</b><span>Cor torna o feed mais recompensador.</span></div><input type="checkbox" class="switch" data-k="gray"></div>
+    <div class="row"><div class="t"><b>Esconder Reels e Shorts</b><span>Shorts abrem como vídeo normal.</span></div><input type="checkbox" class="switch" data-k="shorts"></div>
+    <div class="row"><div class="t"><b>Esconder o feed inicial</b><span>Mostra busca e atalhos no lugar.</span></div><input type="checkbox" class="switch" data-k="feed"></div>
+    <div class="row"><div class="t"><b>Aviso de rolagem</b><span>A cada N telas roladas (0 = nunca).</span></div><input type="number" min="0" max="100" step="10" data-k="cue"></div>
+  </div>
+
+  <div class="k">Horário de descanso</div>
+  <div class="card rows">
+    <div class="row"><div class="t"><b>Ativar</b><span>Pausa máxima (30 s).</span></div><input type="checkbox" class="switch" data-k="rest"></div>
+    <div class="row"><div class="t"><b>Início</b></div><input type="time" data-k="restStart"></div>
+    <div class="row"><div class="t"><b>Fim</b></div><input type="time" data-k="restEnd"></div>
+  </div>
+
+  <div class="k">Plano se–então</div>
+  <div class="card">
+    <input type="text" data-k="planIf" placeholder="Se… (ex.: sentir vontade de abrir o Instagram)">
+    <input type="text" data-k="planThen" placeholder="então… (ex.: levanto e bebo água)" style="margin-top:8px">
+  </div>
+  <p class="mu c" style="margin-top:32px">Respiro · sem anúncios, sem contas.</p>
+</main>
+<script src="common.js"></script>
+<script src="sync.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

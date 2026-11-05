@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Respiro</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { width: 320px; }
+  main { padding: 20px 16px; }
+  h1 { font-size: 26px; }
+  .big { font-size: 40px; font-weight: 700; letter-spacing: -.02em; }
+  .bar { height: 6px; border-radius: 3px; background: var(--ln); margin-top: 10px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--fg); }
+  .row { padding: 10px 0; min-height: 0; }
+  .row .v { color: var(--mu); font-size: 14px; }
+  .k { margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <div class="mu" id="label" style="margin:0">hoje nas redes</div>
+    <div class="big" id="total">0 min</div>
+    <div class="bar"><i id="bar"></i></div>
+    <p class="mu" id="goal"></p>
+  </div>
+  <div id="sites" class="card rows" style="margin-top:10px"></div>
+  <div class="k">Modo foco</div>
+  <div id="focus"></div>
+  <p class="mu c" id="sync" style="margin-top:16px"></p>
+  <button class="txt" id="opts">Ajustes</button>
+</main>
+<script src="common.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

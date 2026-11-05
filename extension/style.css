@@ -1,0 +1,40 @@
+/* Visual do app: preto e branco, cartões cinza, tipografia do sistema. */
+:root { --bg: #fff; --fg: #000; --mu: #86868b; --cd: #f5f5f7; --ln: #e8e8ed; --ed: #d2d2d7; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #000; --fg: #fff; --cd: #161617; --ln: #262628; --ed: #3a3a3c; } }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 440px; margin: 0 auto; padding: 48px 20px; }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+h2 { font-size: 20px; font-weight: 600; margin: 28px 0 0; }
+.k { font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--mu); margin: 28px 0 10px; }
+.mu { color: var(--mu); font-size: 14px; line-height: 1.4; margin: 4px 0 0; }
+.c { text-align: center; }
+.card { background: var(--cd); border-radius: 18px; padding: 18px; }
+.card.rows { padding: 4px 18px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 52px; }
+.row + .row { border-top: 1px solid var(--ln); }
+.row .t { flex: 1; min-width: 0; }
+.row .t b { display: block; font-weight: 500; font-size: 16px; }
+.row .t span { display: block; color: var(--mu); font-size: 13px; margin-top: 2px; }
+button, .btn { font: inherit; font-size: 17px; font-weight: 600; border: 0; border-radius: 16px; padding: 15px 16px; width: 100%; cursor: pointer;
+  background: var(--fg); color: var(--bg); display: block; text-align: center; text-decoration: none; }
+button.sec { background: var(--cd); color: var(--fg); }
+.card button.sec { background: var(--bg); }
+button.txt { background: none; color: var(--mu); font-weight: 400; font-size: 14px; text-decoration: underline; }
+button:disabled { opacity: .35; cursor: default; }
+button + button { margin-top: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chips.center { justify-content: center; }
+.chip { font: inherit; font-size: 15px; font-weight: 500; width: auto; padding: 9px 14px; border-radius: 999px; background: var(--cd); color: var(--fg); margin: 0 !important; }
+.chip.on { background: var(--fg); color: var(--bg); }
+input[type=text], input[type=number], input[type=time], input[type=url], textarea {
+  font: inherit; font-size: 16px; width: 100%; padding: 13px 14px; border-radius: 14px; border: 0; outline: 0; background: var(--cd); color: var(--fg); }
+.row input[type=number], .row input[type=time] { width: 96px; background: var(--bg); text-align: center; }
+.switch { appearance: none; -webkit-appearance: none; width: 46px; height: 28px; border-radius: 14px; background: var(--ed); position: relative; cursor: pointer; flex: none; margin: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left .15s; }
+.switch:checked { background: var(--fg); }
+.switch:checked::after { left: 21px; background: var(--bg); }
+.hidden { display: none !important; }
+.fade { animation: fade .3s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+code { font-size: 12px; word-break: break-all; }
