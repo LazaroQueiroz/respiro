@@ -295,6 +295,9 @@ fun MainActivity.statsTab(): View {
     return scroll(col)
 }
 
+/** Média que pode ficar abaixo de 1 min (ex.: poucos minutos na semana). */
+private fun fmtAvg(ms: Long) = if (ms in 1 until MIN) "menos de 1 min" else fmt(ms)
+
 private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
     val goal = Prefs.goalMin * MIN
     val last7 = 7..13
@@ -355,6 +358,10 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
         add(caption("Cinza: tela total · Preto: redes · Tracejado: meta de ${fmt(goal)}", 12f), top = 10)
         val pick = last7.sumOf { st.days[it].pickups }
         if (pick > 0) add(caption("${pick / 7} desbloqueios por dia, em média.", 13f), top = 4)
+        val remote7 = last7.sumOf { st.days[it].remote }
+        if (remote7 >= MIN) add(caption(
+            "Redes por dia: celular ${fmtAvg((social7 - remote7) / 7)} · computador ${fmtAvg(remote7 / 7)}. A tela total é só a do celular.", 13f,
+        ), top = 4)
     }, top = 10)
 
     // --- Por rede
@@ -372,6 +379,8 @@ private fun MainActivity.fillStats(body: LinearLayout, st: Stats) {
                     add(label(fmt(ms / 7), 15f, 500, if (ms / 7 > lim) cFg else cMuted), w = WRAP)
                 }, top = if (i == 0) 0 else 14)
                 add(HBar(this@fillStats, ms.toFloat() / max), top = 6)
+                val pc = last7.sumOf { st.days[it].remotePer[id] ?: 0L }
+                if (pc >= MIN) add(caption("celular ${fmtAvg((ms - pc) / 7)} · computador ${fmtAvg(pc / 7)}", 12f), top = 4)
             }
         }, top = 10)
     }

@@ -168,7 +168,11 @@ object Sync {
         var latest: JSONObject? = null
         var askedState = false
         // O ntfy.sh guarda as mensagens por ~12 h: sem contato há 6 h, pede o estado do outro lado.
-        if (now() - lastSync > 6 * HOUR) publish(JSONObject().put("t", "req").put("from", ME))
+        // Também pede uma vez por conexão, para trazer o histórico de uso (14 dias) do outro lado.
+        if (now() - lastSync > 6 * HOUR || sp.getString("sync_backfill", "") != topic) {
+            publish(JSONObject().put("t", "req").put("from", ME))
+            sp.edit().putString("sync_backfill", topic).apply()
+        }
         val body = http("GET", "$server/$topic/json?poll=1&since=$since") ?: return false
         body.lineSequence().filter { it.isNotBlank() }.forEach { line ->
             val ev = runCatching { JSONObject(line) }.getOrNull() ?: return@forEach

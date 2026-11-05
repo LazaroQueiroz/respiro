@@ -75,7 +75,11 @@ var RSPSync = (function () {
     let c = await cfg();
     if (!paired(c)) return false;
     // O ntfy.sh guarda as mensagens por ~12 h: sem contato há 6 h, pede o estado do outro lado.
-    if (Date.now() - (c.last || 0) > 6 * 3600000) await publish({ t: 'req', from: ME }).catch(function () {});
+    // Também pede uma vez por conexão, para trazer o histórico de uso (14 dias) do outro lado.
+    if (Date.now() - (c.last || 0) > 6 * 3600000 || c.backfill !== c.topic) {
+      await publish({ t: 'req', from: ME }).catch(function () {});
+      c = await setCfg({ backfill: c.topic });
+    }
     let r;
     try { r = await fetch(server(c) + '/' + c.topic + '/json?poll=1&since=' + (c.since || 'all')); }
     catch (e) { await setCfg({ error: 'sem conexão com ' + server(c) }); return false; }

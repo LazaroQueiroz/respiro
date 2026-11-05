@@ -493,7 +493,9 @@ object Usage {
 }
 
 /** Um dia de uso já somado por rede: app nativo + versão web dentro do Respiro. */
-class DayUsage(val day: Usage.Day, val perSite: Map<String, Long>, val remote: Long = 0) {
+class DayUsage(val day: Usage.Day, val perSite: Map<String, Long>, val remotePer: Map<String, Long> = emptyMap()) {
+    /** Parte do tempo nas redes que veio dos navegadores do computador. */
+    val remote get() = remotePer.values.sum()
     val start get() = day.start
     val total get() = day.total
     val pickups get() = day.pickups
@@ -509,7 +511,8 @@ fun usageOn(c: Context, start: Long, includeRemote: Boolean = true): DayUsage {
     val d = Usage.day(c, start)
     val web = Db.i.webMs(start, nextDay(start))
     val remote = if (includeRemote) Sync.remoteMs(start) else emptyMap()
-    return DayUsage(d, Sites.all().associate { it.id to d.native(it) + (web[it.id] ?: 0L) + (remote[it.id] ?: 0L) }, remote.values.sum())
+    val ids = Sites.all().map { it.id }.toSet()
+    return DayUsage(d, Sites.all().associate { it.id to d.native(it) + (web[it.id] ?: 0L) + (remote[it.id] ?: 0L) }, remote.filterKeys { it in ids })
 }
 
 fun Context.a11yOn(): Boolean {
