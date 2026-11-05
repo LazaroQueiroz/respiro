@@ -147,7 +147,7 @@ novo quando o navegador volta para a frente.
 ## Extensão do navegador
 
 ```sh
-./scripts/build-extension.sh   # copia filter.js e sites.json e gera build/respiro-extension-<versão>.zip
+./scripts/build-extension.sh   # gera build/respiro-extension-<versão>.zip (Chrome) e -firefox.zip (addons.mozilla.org)
 ```
 
 - **Chrome/Edge/Brave:** `chrome://extensions` → Modo do desenvolvedor → *Carregar sem compactação* → pasta `extension/`.

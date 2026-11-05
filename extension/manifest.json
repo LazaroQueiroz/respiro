@@ -3,8 +3,18 @@
   "name": "Respiro",
   "version": "0.0.0",
   "description": "Uma pausa antes das redes sociais, sem feed infinito e sem vídeos curtos.",
-  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
-  "permissions": ["storage", "webNavigation", "tabs", "alarms"],
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "permissions": [
+    "storage",
+    "webNavigation",
+    "tabs",
+    "alarms"
+  ],
   "host_permissions": [
     "https://ntfy.sh/*",
     "*://*.instagram.com/*",
@@ -20,7 +30,11 @@
   ],
   "background": {
     "service_worker": "background.js",
-    "scripts": ["common.js", "sync.js", "background.js"]
+    "scripts": [
+      "common.js",
+      "sync.js",
+      "background.js"
+    ]
   },
   "content_scripts": [
     {
@@ -36,11 +50,34 @@
         "*://*.reddit.com/*",
         "*://*.linkedin.com/*"
       ],
-      "js": ["common.js", "filter.js", "content.js"],
+      "js": [
+        "common.js",
+        "filter.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "action": { "default_popup": "popup.html", "default_icon": { "16": "icons/16.png", "32": "icons/32.png" } },
-  "options_ui": { "page": "options.html", "open_in_tab": true },
-  "browser_specific_settings": { "gecko": { "id": "respiro@lazaroqueiroz", "strict_min_version": "121.0" } }
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "respiro@lazaroqueiroz",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  }
 }
