@@ -10,7 +10,8 @@
     const total = Object.values(t.ms).reduce(function (a, b) { return a + b; }, 0);
     $('total').textContent = RSP.fmt(total);
     $('bar').style.width = Math.min(100, total / (s.goal * RSP.MIN) * 100) + '%';
-    $('goal').textContent = 'Meta: ' + RSP.fmt(s.goal * RSP.MIN) + (t.gaveUp ? ' · desistiu de abrir ' + t.gaveUp + 'x' : '');
+    $('goal').textContent = 'Meta: ' + RSP.fmt(s.goal * RSP.MIN) + (t.remote >= RSP.MIN ? ' · celular ' + RSP.fmt(t.remote) : '') +
+      (t.gaveUp ? ' · desistiu de abrir ' + t.gaveUp + 'x' : '');
 
     const list = $('sites');
     list.replaceChildren();

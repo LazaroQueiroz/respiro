@@ -57,7 +57,10 @@ object Sync {
         if (k in KEYS || k.startsWith("limit_")) { localTs = now(); schedulePublish() }
     }
 
+    private lateinit var ctx: android.content.Context
+
     fun init(c: android.content.Context) {
+        ctx = c.applicationContext
         sp.registerOnSharedPreferenceChangeListener(listener)
         if (paired) SyncJob.schedule(c)
     }
@@ -176,13 +179,67 @@ object Sync {
             when (msg.optString("t")) {
                 "state" -> if (msg.optLong("ts") > (latest?.optLong("ts") ?: 0)) latest = msg
                 "req" -> askedState = true
+                "usage" -> storeRemote(msg)
             }
         }
         lastSync = now()
-        if (askedState) publish(state())
+        if (askedState) { publish(state()); publishUsage(14) } else publishUsage(if (dayStart() != lastUsageDay) 2 else 1)
         // Aplica na thread principal: assim o listener roda já com `applying` ligado e não republica.
         latest?.let { m -> h.post { if (m.optLong("ts") > localTs) { apply(m); done() } } }
         return true
+    }
+
+    // ---------- Tempo de uso ----------
+    //
+    // Cada lado publica só o tempo que ele mesmo mediu, por rede e por dia:
+    // {t:"usage", from, dev, day:"2026-11-05", ms:{site: ms}}. Quem recebe guarda por aparelho
+    // (dev) e soma aos próprios totais (usageOn). Assim nada é contado em dobro.
+
+    private val dayFmt get() = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+    fun dayKey(start: Long): String = dayFmt.format(start)
+
+    private var lastUsageDay: Long
+        get() = sp.getLong("sync_usage_day", 0)
+        set(v) { sp.edit().putLong("sync_usage_day", v).apply() }
+    private var lastUsageSent: String
+        get() = sp.getString("sync_usage_sent", "")!!
+        set(v) { sp.edit().putString("sync_usage_sent", v).apply() }
+
+    /** Publica o uso dos últimos [days] dias (hoje incluso), pulando o de hoje se não mudou. */
+    private fun publishUsage(days: Int) {
+        if (!::ctx.isInitialized || !Usage.granted(ctx)) return
+        for (i in days - 1 downTo 0) {
+            val start = dayStart(-i)
+            val d = usageOn(ctx, start, includeRemote = false)
+            val ms = JSONObject()
+            d.perSite.filterValues { it >= MIN }.forEach { (k, v) -> ms.put(k, v) }
+            if (i == 0) {
+                val sig = dayKey(start) + ms.toString()
+                if (days == 1 && sig == lastUsageSent) continue
+                lastUsageSent = sig
+            }
+            publish(JSONObject().put("t", "usage").put("from", ME).put("dev", ME).put("day", dayKey(start)).put("ms", ms))
+        }
+        lastUsageDay = dayStart()
+    }
+
+    private fun storeRemote(m: JSONObject) {
+        val dev = m.optString("dev").ifEmpty { m.optString("from") }
+        val day = m.optString("day").takeIf { it.length == 10 } ?: return
+        val all = runCatching { JSONObject(sp.getString("remote_usage", "{}")!!) }.getOrDefault(JSONObject())
+        val d = all.optJSONObject(day) ?: JSONObject().also { all.put(day, it) }
+        d.put(dev, m.optJSONObject("ms") ?: JSONObject())
+        // Guarda só os últimos 30 dias.
+        all.keys().asSequence().toList().sorted().dropLast(30).forEach { all.remove(it) }
+        sp.edit().putString("remote_usage", all.toString()).apply()
+    }
+
+    /** Tempo por rede vindo dos outros aparelhos (navegadores) num dia. */
+    fun remoteMs(start: Long): Map<String, Long> {
+        val d = runCatching { JSONObject(sp.getString("remote_usage", "{}")!!).optJSONObject(dayKey(start)) }.getOrNull() ?: return emptyMap()
+        val out = HashMap<String, Long>()
+        d.keys().forEach { dev -> d.getJSONObject(dev).let { ms -> ms.keys().forEach { k -> out[k] = (out[k] ?: 0L) + ms.getLong(k) } } }
+        return out
     }
 
     private fun publish(o: JSONObject) {

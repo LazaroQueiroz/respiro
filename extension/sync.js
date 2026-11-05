@@ -90,9 +90,10 @@ var RSPSync = (function () {
       if (!m || m.from === ME) continue;
       if (m.t === 'state' && (!latest || m.ts > latest.ts)) latest = m;
       if (m.t === 'req') asked = true;
+      if (m.t === 'usage') await storeRemote(m);
     }
     c = await setCfg({ since: since, last: Date.now(), error: null });
-    if (asked) await publishState();
+    if (asked) { await publishState(); await publishUsage(14); } else await publishUsage(1);
     const { settingsTs } = await chrome.storage.local.get('settingsTs');
     if (latest && latest.ts > (settingsTs || 0)) {
       const patch = {};
@@ -125,5 +126,43 @@ var RSPSync = (function () {
 
   async function code() { const c = await cfg(); return paired(c) ? PREFIX + c.topic + ':' + c.key : ''; }
 
-  return { newCode, parse, pair, unpair, poll, publishState, cfg, setCfg, paired, code, server, encrypt, decrypt };
+  // ---------- Tempo de uso ----------
+  // Cada lado publica só o tempo que ele mesmo mediu: {t:"usage", from, dev, day:"AAAA-MM-DD", ms:{site: ms}}.
+  // O recebido fica em remoteUsage[dia][aparelho] e é somado aos totais daqui (RSP.today).
+
+  async function dev() {
+    let c = await cfg();
+    if (!c || !c.dev) c = await setCfg({ dev: 'ext-' + Array.from(rand(4)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('') });
+    return c.dev;
+  }
+
+  /** Publica os últimos `days` dias (hoje incluso); o de hoje só se mudou desde o último envio. */
+  async function publishUsage(days) {
+    const c = await cfg();
+    if (!paired(c)) return;
+    const { stats } = await chrome.storage.local.get('stats');
+    const id = await dev();
+    for (let i = days - 1; i >= 0; i--) {
+      const day = RSP.dayKey(Date.now() - i * 86400000);
+      const ms = {};
+      const d = (stats || {})[day] || {};
+      Object.keys(d.ms || {}).forEach(function (k) { if (d.ms[k] >= RSP.MIN) ms[k] = d.ms[k]; });
+      if (i === 0) {
+        const sig = day + JSON.stringify(ms);
+        if (days === 1 && sig === (await cfg()).usageSent) continue;
+        await setCfg({ usageSent: sig });
+      }
+      await publish({ t: 'usage', from: ME, dev: id, day: day, ms: ms });
+    }
+  }
+
+  async function storeRemote(m) {
+    if (!m.day || m.day.length !== 10) return;
+    const all = (await chrome.storage.local.get('remoteUsage')).remoteUsage || {};
+    (all[m.day] = all[m.day] || {})[m.dev || m.from] = m.ms || {};
+    Object.keys(all).sort().slice(0, -30).forEach(function (k) { delete all[k]; });
+    await chrome.storage.local.set({ remoteUsage: all });
+  }
+
+  return { publishUsage, newCode, parse, pair, unpair, poll, publishState, cfg, setCfg, paired, code, server, encrypt, decrypt };
 })();

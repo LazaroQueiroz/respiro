@@ -240,6 +240,7 @@ fun MainActivity.todayTab(): View {
         val skipped = opens.gaveUp()
         val parts = ArrayList<String>()
         if (Usage.granted(this)) parts += "tela ${fmt(d.total)}"
+        if (d.remote >= MIN) parts += "computador ${fmt(d.remote)}"
         if (d.pickups > 0) parts += "${d.pickups} desbloqueios"
         if (skipped > 0) parts += "$skipped evitadas"
         sub.text = parts.joinToString("  ·  ")

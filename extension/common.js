@@ -71,11 +71,22 @@ var RSP = (function () {
   function pad(n) { return String(n).padStart(2, '0'); }
   function dayKey(t) { const d = new Date(t || Date.now()); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
-  /** Estatísticas de hoje: { opens: {site: n}, ms: {site: ms}, gaveUp: n }. */
+  /**
+   * Estatísticas de hoje: { opens: {site: n}, ms: {site: ms}, local: {site: ms}, remote: ms, gaveUp: n }.
+   * `ms` soma o tempo medido aqui com o dos outros aparelhos conectados (celular); `local` é só daqui.
+   */
   async function today() {
-    const { stats } = await chrome.storage.local.get('stats');
-    const d = (stats || {})[dayKey()] || {};
-    return { opens: d.opens || {}, ms: d.ms || {}, gaveUp: d.gaveUp || 0 };
+    const o = await chrome.storage.local.get(['stats', 'remoteUsage']);
+    const day = dayKey();
+    const d = (o.stats || {})[day] || {};
+    const local = d.ms || {};
+    const ms = Object.assign({}, local);
+    let remote = 0;
+    const r = (o.remoteUsage || {})[day] || {};
+    Object.keys(r).forEach(function (dev) {
+      Object.keys(r[dev]).forEach(function (k) { ms[k] = (ms[k] || 0) + r[dev][k]; remote += r[dev][k]; });
+    });
+    return { opens: d.opens || {}, ms: ms, local: local, remote: remote, gaveUp: d.gaveUp || 0 };
   }
 
   async function passes() { return (await chrome.storage.local.get('passes')).passes || {}; }
