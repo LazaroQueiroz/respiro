@@ -541,11 +541,20 @@ fun MainActivity.settingsTab(): View {
     group("Extensão do navegador") {
         if (Sync.paired) {
             val last = Sync.lastSync
-            add(row("Conectada", if (last > 0) "Última sincronização: ${java.text.SimpleDateFormat("d/M HH:mm", PT).format(last)}" else "Aguardando a extensão"))
+            val status = Sync.lastError?.let { "Erro: $it" }
+                ?: if (last > 0) "Última sincronização: ${java.text.SimpleDateFormat("d/M HH:mm", PT).format(last)}" else "Aguardando a primeira sincronização"
+            add(row("Conectada", "$status. Busca a cada 15 min e ao abrir o app."))
+            add(divider(), h = 1)
+            add(row("Sincronizar agora") {
+                Sync.syncNow { err ->
+                    android.widget.Toast.makeText(this@settingsTab, err?.let { "Falhou: $it" } ?: "Sincronizado", android.widget.Toast.LENGTH_SHORT).show()
+                    refresh()
+                }
+            })
             add(divider(), h = 1)
             add(row("Código de conexão", "Cole na extensão para conectar outro navegador.") { shareText(Sync.code()) })
             add(divider(), h = 1)
-            add(row("Desconectar") { Sync.unpair(); refresh() })
+            add(row("Desconectar") { Sync.unpair(this@settingsTab); refresh() })
         } else {
             add(row("Conectar extensão", "Ajustes e sites iguais no celular e no computador, via ntfy.sh, cifrados.") { syncDialog() })
         }
@@ -671,12 +680,12 @@ private fun MainActivity.syncDialog() {
     android.app.AlertDialog.Builder(this).setTitle("Conectar extensão").setView(box)
         .setNegativeButton("Cancelar", null)
         .setNeutralButton("Gerar código") { _, _ ->
-            Sync.pair(Sync.newCode())
+            Sync.pair(this, Sync.newCode(), generated = true)
             shareText(Sync.code())
             refresh()
         }
         .setPositiveButton("Conectar") { _, _ ->
-            if (!Sync.pair(input.text.toString())) android.widget.Toast.makeText(this, "Código inválido", android.widget.Toast.LENGTH_SHORT).show()
+            if (!Sync.pair(this, input.text.toString())) android.widget.Toast.makeText(this, "Código inválido", android.widget.Toast.LENGTH_SHORT).show()
             refresh()
         }.show()
 }

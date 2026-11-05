@@ -79,7 +79,8 @@
     const c = await RSPSync.cfg();
     if (RSPSync.paired(c)) {
       box.append(el('b', '', 'Conectado'),
-        el('p', 'mu', c.last ? 'Última sincronização: ' + new Date(c.last).toLocaleString('pt-BR') : 'Aguardando o app'),
+        el('p', 'mu', c.error ? 'Erro: ' + c.error : c.last ? 'Última sincronização: ' + new Date(c.last).toLocaleString('pt-BR') : 'Aguardando a primeira sincronização'),
+        el('p', 'mu', 'Busca a cada 5 min e ao abrir o ícone da extensão. O celular busca a cada 15 min.'),
         el('p', 'mu', 'Código desta conexão (para outro navegador ou para o app):'));
       const code = el('input'); code.id = 'code'; code.type = 'text'; code.readOnly = true; code.value = await RSPSync.code();
       code.onclick = function () { code.select(); };
@@ -106,7 +107,7 @@
       fill(); renderSync();
     }), btn('Gerar código aqui', 'sec', async function () {
       const code = RSPSync.newCode();
-      try { await RSPSync.pair(code, srv.value.trim()); } catch (e) {}
+      try { await RSPSync.pair(code, srv.value.trim(), true); } catch (e) {}
       renderSync();
     }));
     box.append(input, srv, row, msg);

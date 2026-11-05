@@ -74,8 +74,12 @@ var RSPSync = (function () {
   async function poll() {
     let c = await cfg();
     if (!paired(c)) return false;
-    const r = await fetch(server(c) + '/' + c.topic + '/json?poll=1&since=' + (c.since || 'all'));
-    if (!r.ok) return false;
+    // O ntfy.sh guarda as mensagens por ~12 h: sem contato há 6 h, pede o estado do outro lado.
+    if (Date.now() - (c.last || 0) > 6 * 3600000) await publish({ t: 'req', from: ME }).catch(function () {});
+    let r;
+    try { r = await fetch(server(c) + '/' + c.topic + '/json?poll=1&since=' + (c.since || 'all')); }
+    catch (e) { await setCfg({ error: 'sem conexão com ' + server(c) }); return false; }
+    if (!r.ok) { await setCfg({ error: 'ntfy respondeu ' + r.status }); return false; }
     let latest = null, asked = false, since = c.since || 'all';
     for (const line of (await r.text()).split('\n')) {
       if (!line.trim()) continue;
@@ -87,7 +91,7 @@ var RSPSync = (function () {
       if (m.t === 'state' && (!latest || m.ts > latest.ts)) latest = m;
       if (m.t === 'req') asked = true;
     }
-    c = await setCfg({ since: since, last: Date.now() });
+    c = await setCfg({ since: since, last: Date.now(), error: null });
     if (asked) await publishState();
     const { settingsTs } = await chrome.storage.local.get('settingsTs');
     if (latest && latest.ts > (settingsTs || 0)) {
@@ -99,13 +103,15 @@ var RSPSync = (function () {
     return false;
   }
 
-  /** Conecta com um código (gerado aqui ou no app). */
-  async function pair(code, srv) {
+  /**
+   * Conecta com um código. Quem gera o código fica com os ajustes valendo (ts = agora);
+   * quem cola adota os do outro lado (ts = 0).
+   */
+  async function pair(code, srv, generated) {
     const p = parse(code);
     if (!p) return false;
-    await setCfg({ topic: p.topic, key: p.key, since: 'all', last: 0, server: srv || server(await cfg()) });
-    const { settingsTs } = await chrome.storage.local.get('settingsTs');
-    if (!settingsTs) await chrome.storage.local.set({ settingsTs: 1 }); // nunca mudado aqui: o outro lado vence
+    await setCfg({ topic: p.topic, key: p.key, since: 'all', last: 0, error: null, server: srv || server(await cfg()) });
+    await chrome.storage.local.set({ settingsTs: generated ? Date.now() : 0, settingsFrom: 'remote' });
     await publish({ t: 'req', from: ME });
     await publishState();
     await poll();

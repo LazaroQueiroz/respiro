@@ -74,6 +74,7 @@ class InterceptActivity : Activity() {
         site = Sites.byId(i.getStringExtra("site") ?: "") ?: run { finish(); return }
         mode = runCatching { Mode.valueOf(i.getStringExtra("mode")!!) }.getOrDefault(Mode.OPEN)
         pkg = i.getStringExtra("pkg")
+        if (!i.getBooleanExtra("preview", false)) Sync.poll() // ex.: modo foco ligado no computador
         browserUrl = i.getStringExtra("browserUrl")
         preview = i.getBooleanExtra("preview", false)
         if (mode == Mode.OPEN && Prefs.focusActive()) mode = Mode.FOCUS

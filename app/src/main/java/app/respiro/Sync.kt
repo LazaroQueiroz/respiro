@@ -45,6 +45,9 @@ object Sync {
     private var localTs: Long
         get() = sp.getLong("sync_ts", 0)
         set(v) { sp.edit().putLong("sync_ts", v).apply() }
+    /** Último erro de rede (null = última tentativa deu certo). */
+    @Volatile var lastError: String? = null
+        private set
     private var since: String
         get() = sp.getString("sync_since", "all")!!
         set(v) { sp.edit().putString("sync_since", v).apply() }
@@ -54,7 +57,10 @@ object Sync {
         if (k in KEYS || k.startsWith("limit_")) { localTs = now(); schedulePublish() }
     }
 
-    fun init() { sp.registerOnSharedPreferenceChangeListener(listener) }
+    fun init(c: android.content.Context) {
+        sp.registerOnSharedPreferenceChangeListener(listener)
+        if (paired) SyncJob.schedule(c)
+    }
 
     // ---------- Pareamento ----------
 
@@ -67,18 +73,26 @@ object Sync {
 
     fun code() = if (paired) "$PREFIX$topic:$key" else ""
 
-    /** Aplica um código de pareamento; devolve false se o formato estiver errado. */
-    fun pair(code: String): Boolean {
+    /**
+     * Aplica um código de pareamento; devolve false se o formato estiver errado.
+     * Quem gera o código fica com os ajustes valendo (ts = agora); quem cola adota os do outro lado (ts = 0).
+     */
+    fun pair(c: android.content.Context, code: String, generated: Boolean = false): Boolean {
         val p = code.trim().removePrefix(PREFIX).split(":")
         if (!code.trim().startsWith(PREFIX) || p.size != 2 || !Regex("[a-f0-9]{32}").matches(p[0])) return false
         if (runCatching { unb64url(p[1]).size }.getOrNull() != 32) return false
-        sp.edit().putString("sync_topic", p[0]).putString("sync_key", p[1]).putString("sync_since", "all").apply()
-        if (localTs == 0L) localTs = 1 // nunca mudado aqui: o estado do outro lado vence
+        sp.edit().putString("sync_topic", p[0]).putString("sync_key", p[1]).putString("sync_since", "all").remove("sync_last").apply()
+        localTs = if (generated) now() else 0
+        SyncJob.schedule(c)
         thread { publish(JSONObject().put("t", "req").put("from", ME)); publish(state()); pollNow() }
         return true
     }
 
-    fun unpair() { sp.edit().remove("sync_topic").remove("sync_key").remove("sync_since").remove("sync_last").apply() }
+    fun unpair(c: android.content.Context) {
+        sp.edit().remove("sync_topic").remove("sync_key").remove("sync_since").remove("sync_last").apply()
+        lastError = null
+        SyncJob.cancel(c)
+    }
 
     // ---------- Estado ----------
 
@@ -130,16 +144,29 @@ object Sync {
         h.postDelayed(publishTask, 3000)
     }
 
-    /** Busca as mensagens novas. Chamado ao abrir o app; [done] roda na thread principal se algo mudou. */
+    /** Busca as mensagens novas. Chamado ao abrir o app e na pausa; [done] roda na thread principal se algo mudou. */
     fun poll(done: () -> Unit = {}) {
         if (!paired) return
         thread { pollNow(done) }
     }
 
-    private fun pollNow(done: () -> Unit = {}) {
+    /** "Sincronizar agora": publica o estado, busca e devolve o erro (ou null) na thread principal. */
+    fun syncNow(done: (String?) -> Unit) {
+        if (!paired) return
+        thread {
+            publish(state())
+            pollNow()
+            h.post { done(lastError) }
+        }
+    }
+
+    /** Busca as mensagens novas, na thread atual. Devolve false se a rede falhou. */
+    fun pollNow(done: () -> Unit = {}): Boolean {
         var latest: JSONObject? = null
         var askedState = false
-        val body = http("GET", "$server/$topic/json?poll=1&since=$since") ?: return
+        // O ntfy.sh guarda as mensagens por ~12 h: sem contato há 6 h, pede o estado do outro lado.
+        if (now() - lastSync > 6 * HOUR) publish(JSONObject().put("t", "req").put("from", ME))
+        val body = http("GET", "$server/$topic/json?poll=1&since=$since") ?: return false
         body.lineSequence().filter { it.isNotBlank() }.forEach { line ->
             val ev = runCatching { JSONObject(line) }.getOrNull() ?: return@forEach
             if (ev.optString("event") != "message") return@forEach
@@ -155,6 +182,7 @@ object Sync {
         if (askedState) publish(state())
         // Aplica na thread principal: assim o listener roda já com `applying` ligado e não republica.
         latest?.let { m -> h.post { if (m.optLong("ts") > localTs) { apply(m); done() } } }
+        return true
     }
 
     private fun publish(o: JSONObject) {
@@ -162,7 +190,7 @@ object Sync {
         http("POST", "$server/$topic", encrypt(o.toString()))
     }
 
-    private fun http(method: String, url: String, body: String? = null): String? = runCatching {
+    private fun http(method: String, url: String, body: String? = null): String? = runCatching<String?> {
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = method
         c.connectTimeout = 10_000; c.readTimeout = 15_000
@@ -174,8 +202,10 @@ object Sync {
         val code = c.responseCode
         val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }
         c.disconnect()
-        if (code in 200..299) text else null
-    }.getOrNull()
+        if (code !in 200..299) error("ntfy respondeu $code")
+        lastError = null
+        text
+    }.onFailure { lastError = it.message ?: it.javaClass.simpleName }.getOrNull()
 
     private fun thread(block: () -> Unit) = Thread { runCatching(block) }.start()
 

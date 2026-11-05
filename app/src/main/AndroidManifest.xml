@@ -118,6 +118,12 @@
                 android:resource="@xml/accessibility_config" />
         </service>
 
+        <!-- Busca as mudanças da extensão a cada 15 min (Sync.kt). -->
+        <service
+            android:name=".SyncJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".Reminders"
             android:exported="true">

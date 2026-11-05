@@ -30,7 +30,7 @@ class App : Application() {
         Prefs.init(this)
         Db.init(this)
         Sites.app = this
-        Sync.init()
+        Sync.init(this)
     }
 }
 
